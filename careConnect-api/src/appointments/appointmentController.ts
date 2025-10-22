@@ -3,12 +3,49 @@ import { supabase } from '../config/supabaseClient';
 
 /**
  * RF005 - Solicitar Agendamento
+ * RF011 - Verificação automática de disponibilidade
  */
 export const criarAgendamento = async (req: Request, res: Response) => {
   const { cuidador_id, familiar_id, data, horario, observacao } = req.body;
 
   try {
-    // Cria o agendamento
+    const dias = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
+    const dataObj = new Date(data);
+    const diaSemana = dias[dataObj.getDay()];
+
+    const { data: disponibilidade, error: dispError } = await supabase
+      .from('disponibilidades')
+      .select('*')
+      .eq('cuidador_id', cuidador_id)
+      .eq('dia_semana', diaSemana)
+      .lte('horario_inicio', horario)
+      .gte('horario_fim', horario)
+      .maybeSingle();
+
+    if (dispError) throw dispError;
+
+    if (!disponibilidade) {
+      return res.status(400).json({
+        error: 'O cuidador não está disponível neste dia e horário.',
+      });
+    }
+
+    const { data: conflito, error: conflitoError } = await supabase
+      .from('agendamentos')
+      .select('id')
+      .eq('cuidador_id', cuidador_id)
+      .eq('data', data)
+      .eq('horario', horario)
+      .maybeSingle();
+
+    if (conflitoError) throw conflitoError;
+
+    if (conflito) {
+      return res.status(400).json({
+        error: 'Este horário já está reservado para o cuidador.',
+      });
+    }
+
     const { data: agendamento, error } = await supabase
       .from('agendamentos')
       .insert([
@@ -26,7 +63,6 @@ export const criarAgendamento = async (req: Request, res: Response) => {
 
     if (error) throw error;
 
-    // 🔔 Cria notificação automática para o cuidador
     await supabase.from('notificacoes').insert([
       {
         usuario_id: cuidador_id,
@@ -41,6 +77,7 @@ export const criarAgendamento = async (req: Request, res: Response) => {
       agendamento,
     });
   } catch (err: any) {
+    console.error('Erro ao criar agendamento:', err.message);
     return res.status(400).json({ error: err.message });
   }
 };
