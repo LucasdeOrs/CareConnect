@@ -1,13 +1,8 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabaseClient';
 
-/**
- * RF003 e RF004 - Listar e visualizar usuários (cuidadores e familiares)
- */
-
-// Lista todos os usuários, podendo filtrar por tipo
 export const listUsuarios = async (req: Request, res: Response) => {
-  const { tipo } = req.query; // Exemplo: /usuarios?tipo=cuidador
+  const { tipo } = req.query;
 
   try {
     let query = supabase.from('usuarios').select('*').order('data_criacao', { ascending: false });
@@ -26,7 +21,6 @@ export const listUsuarios = async (req: Request, res: Response) => {
   }
 };
 
-// Retorna um usuário específico
 export const getUsuarioById = async (req: Request, res: Response) => {
   const { id } = req.params;
 
