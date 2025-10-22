@@ -8,6 +8,7 @@ import notificationRoutes from './notifications/notificationRoutes';
 import reviewRoutes from './reviews/reviewRoutes';
 import availabilityRoutes from './availability/availabilityRoutes';
 import paymentRoutes from './payments/paymentRoutes';
+import reportRoutes from './report/reportRoutes';
 
 dotenv.config();
 const app = express();
@@ -22,6 +23,7 @@ app.use('/notificacoes', notificationRoutes);
 app.use('/avaliacoes', reviewRoutes);
 app.use('/disponibilidades', availabilityRoutes);
 app.use('/pagamentos', paymentRoutes);
+app.use('/relatorios', reportRoutes);
 
 app.get('/', (req, res) => {
   res.send('Consulta Fácil API funcionando!');
