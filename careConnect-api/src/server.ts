@@ -5,6 +5,7 @@ import authRoutes from './auth/authRoutes';
 import appointmentRoutes from './appointments/appointmentRoutes';
 import userRoutes from './users/userRoutes';
 import notificationRoutes from './notifications/notificationRoutes';
+import reviewRoutes from './reviews/reviewRoutes';
 
 dotenv.config();
 const app = express();
@@ -16,6 +17,7 @@ app.use('/auth', authRoutes);
 app.use('/usuarios', userRoutes);
 app.use('/agendamentos', appointmentRoutes);
 app.use('/notificacoes', notificationRoutes);
+app.use('/avaliacoes', reviewRoutes);
 
 app.get('/', (req, res) => {
   res.send('Consulta Fácil API funcionando!');
