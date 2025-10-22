@@ -110,24 +110,23 @@ export const atualizarStatus = async (req: Request, res: Response) => {
 
     if (error) throw error;
 
-    // 🔔 Cria notificação automática para o familiar
-    if (agendamento?.familiar_id) {
-      let mensagem = '';
-      switch (status) {
-        case 'aceito':
-          mensagem = 'Seu agendamento foi aceito pelo cuidador.';
-          break;
-        case 'recusado':
-          mensagem = 'Seu agendamento foi recusado.';
-          break;
-        case 'concluido':
-          mensagem = 'O agendamento foi concluído com sucesso.';
-          break;
-        case 'cancelado':
-          mensagem = 'O agendamento foi cancelado.';
-          break;
-      }
+    let mensagem = '';
+    switch (status) {
+      case 'aceito':
+        mensagem = 'Seu agendamento foi aceito pelo cuidador. O pagamento está pendente.';
+        break;
+      case 'recusado':
+        mensagem = 'Seu agendamento foi recusado.';
+        break;
+      case 'concluido':
+        mensagem = 'O agendamento foi concluído com sucesso.';
+        break;
+      case 'cancelado':
+        mensagem = 'O agendamento foi cancelado.';
+        break;
+    }
 
+    if (agendamento?.familiar_id && mensagem) {
       await supabase.from('notificacoes').insert([
         {
           usuario_id: agendamento.familiar_id,
@@ -138,11 +137,43 @@ export const atualizarStatus = async (req: Request, res: Response) => {
       ]);
     }
 
+    if (status === 'aceito') {
+      const valorPadrao = 150.0;
+      const metodoPadrao = 'cartao';
+
+      const { data: pagamento, error: pagamentoError } = await supabase
+        .from('pagamentos')
+        .insert([
+          {
+            agendamento_id: agendamento.id,
+            valor: valorPadrao,
+            metodo: metodoPadrao,
+            status: 'pendente',
+          },
+        ])
+        .select()
+        .single();
+
+      if (pagamentoError) throw pagamentoError;
+
+      await supabase.from('notificacoes').insert([
+        {
+          usuario_id: agendamento.familiar_id,
+          agendamento_id: agendamento.id,
+          tipo: 'outro',
+          mensagem: `Um pagamento no valor de R$${valorPadrao.toFixed(
+            2
+          )} foi gerado. Por favor, realize o pagamento para confirmar o atendimento.`,
+        },
+      ]);
+    }
+
     return res.status(200).json({
       message: 'Status atualizado com sucesso!',
       agendamento,
     });
   } catch (err: any) {
+    console.error('Erro ao atualizar status do agendamento:', err.message);
     return res.status(400).json({ error: err.message });
   }
 };
