@@ -1,16 +1,19 @@
-# careconnect_app
+# CareConnect
 
-A new Flutter project.
+Aplicação em Flutter para conexão de cuidadores.
 
-## Getting Started
+## Como rodar o projeto
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+1. Clone o repositório.
+2. Instale as dependências:
+   flutter pub get
+3. Rode a apliação:
+   flutter run
+4. Faça login na plataforma:
+   Cuidador:
+     - testcuidador1@email.com
+     - 123456
+   Familiar:
+     - testfamiliar1@email.com
+     - 123456
+* Confirmação de email desabilitada, caso a aplicação trave após a tentativa de login, basta atualizar a pagina *
