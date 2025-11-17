@@ -1,3 +1,4 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/screens/auth/reset_password/update_password_screen.dart';
 import 'package:careconnect_app/screens/profile/caregiver_screens/edit_professional_profile_screen.dart';
@@ -8,8 +9,9 @@ import 'package:careconnect_app/screens/profile/familiar_screens/my_patients_scr
 import 'package:careconnect_app/screens/profile/familiar_screens/payment_history_screen.dart';
 import 'package:careconnect_app/screens/settings/help_center_screen.dart';
 import 'package:careconnect_app/screens/settings/settings_screen.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/user_service.dart';
 import 'package:flutter/material.dart';
-import '../../main.dart';
 import '../auth/login/login_screen.dart';
 import 'edit_personal_profile_screen.dart';
 
@@ -28,45 +30,19 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  late final Future<(Map<String, dynamic>, CaregiverProfile?)> _userDataFuture;
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
+  late final Future<UserProfileData> _userDataFuture;
 
   @override
   void initState() {
     super.initState();
-    _userDataFuture = _fetchUserData();
-  }
-
-  Future<(Map<String, dynamic>, CaregiverProfile?)> _fetchUserData() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) throw Exception('Usuário não autenticado');
-    try {
-      final userData = await supabase
-          .from('usuarios')
-          .select()
-          .eq('id', user.id)
-          .single();
-
-      CaregiverProfile? caregiverProfile;
-      if (userData['tipo'] == 'cuidador') {
-        final caregiverData = await supabase
-            .from('cuidadores')
-            .select('*, usuarios!inner(*)')
-            .eq('usuario_id', user.id)
-            .single();
-
-        caregiverProfile = CaregiverProfile.fromSupabase(caregiverData);
-      }
-
-      return (userData, caregiverProfile);
-    } catch (e) {
-      debugPrint("Erro ao buscar dados do usuário: $e");
-      throw Exception("Não foi possível carregar os dados do perfil.");
-    }
+    _userDataFuture = _userService.getFullUserProfileAndMaps();
   }
 
   Future<void> _signOut() async {
     try {
-      await supabase.auth.signOut();
+      await _authService.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -77,8 +53,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao sair: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -102,7 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.of(context).pop();
               _signOut();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text(
               'Sim, Sair',
               style: TextStyle(color: Colors.white),
@@ -129,7 +105,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           automaticallyImplyLeading: false,
         ),
         Expanded(
-          child: FutureBuilder<(Map<String, dynamic>, CaregiverProfile?)>(
+          child: FutureBuilder<UserProfileData>(
             future: _userDataFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -142,18 +118,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 return const Center(child: Text('Nenhum dado encontrado.'));
               }
 
-              final (userData, caregiverProfile) = snapshot.data!;
-              final userType = userData['tipo'] as String;
+              final (userModel, caregiverProfile, userDataMap, _) =
+                  snapshot.data!;
+              final userType = userModel.userType?.toDb ?? 'familiar';
 
               return ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  _buildProfileHeader(userData),
+                  _buildProfileHeader(userDataMap),
                   const Divider(height: 1, thickness: 0.5),
                   if (userType == 'familiar')
-                    ..._buildFamiliarMenu(context, userData)
+                    ..._buildFamiliarMenu(context, userDataMap)
                   else
-                    ..._buildCaregiverMenu(context, userData, caregiverProfile),
+                    ..._buildCaregiverMenu(
+                      context,
+                      userDataMap,
+                      caregiverProfile,
+                    ),
                   ..._buildCommonMenu(context),
                   const Divider(height: 1, thickness: 0.5),
                   ..._buildLogout(context),
@@ -219,8 +200,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(
         title.toUpperCase(),
-        style: TextStyle(
-          color: Colors.indigo,
+        style: const TextStyle(
+          color: AppColors.primary,
           fontWeight: FontWeight.bold,
           fontSize: 13,
         ),
@@ -378,10 +359,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
         child: TextButton.icon(
-          icon: const Icon(Icons.logout, color: Colors.red),
+          icon: const Icon(Icons.logout, color: AppColors.error), // Cor
           label: const Text(
             'Sair da Conta',
-            style: TextStyle(color: Colors.red, fontSize: 16),
+            style: TextStyle(color: AppColors.error, fontSize: 16), // Cor
           ),
           onPressed: _showLogoutDialog,
           style: TextButton.styleFrom(
@@ -404,14 +385,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showComingSoon() {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Em breve!'), backgroundColor: Colors.blue),
+      const SnackBar(
+        content: Text('Em breve!'),
+        backgroundColor: AppColors.primary,
+      ),
     );
   }
 
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(content: Text(message), backgroundColor: AppColors.error), // Cor
     );
   }
 }

@@ -1,16 +1,16 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/screens/appointment/appointments_screen.dart';
 import 'package:careconnect_app/screens/chat/inbox_screen.dart';
 import 'package:careconnect_app/screens/home/widgets/caregiver_detail_modal.dart';
 import 'package:careconnect_app/screens/profile/profile_screen.dart';
+import 'package:careconnect_app/services/caregiver_service.dart';
+import 'package:careconnect_app/services/location_service.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../main.dart';
 import '../../models/caregiver_profile.dart';
 import 'widgets/app_drawer.dart';
-import '../../widgets/cards/caregiver_card.dart';
-import '../../widgets/logo_widget.dart';
+import '../../core/widgets/cards/caregiver_card.dart';
+import '../../core/widgets/logo_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +20,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  final CaregiverService _caregiverService = CaregiverService();
+
   CaregiverProfile? _selectedCaregiver;
 
   String _currentView = 'home';
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'price_asc': 'Menor preço',
     'price_desc': 'Maior preço',
   };
+
   final _scrollController = ScrollController();
   final List<CaregiverProfile> _caregivers = [];
   bool _isLoading = false;
@@ -47,8 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentPage = 0;
   final int _pageSize = 10;
   bool _showAdvancedFilters = false;
-  static List<String> _todasCidadesComUF = [];
-  static bool _isLoadingApi = false;
+
+  List<String> _todasCidadesComUF = [];
   bool _isLocalLoading = false;
 
   @override
@@ -88,7 +91,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadMoreData() async {
     if (_isLoading || !_hasMore) return;
-    _currentPage++;
+    setState(() {
+      _currentPage++;
+    });
     await _fetchCaregivers();
   }
 
@@ -111,73 +116,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() => _isLoading = true);
 
     final from = _currentPage * _pageSize;
-    final to = from + _pageSize - 1;
 
     try {
-      dynamic query = supabase
-          .from('cuidadores')
-          .select('*, usuarios!inner(*), profissao, formacao_saude');
-      query = query.eq('approval_status', 'Aprovado');
-      final searchTerm = _searchController.text.trim();
-      if (searchTerm.isNotEmpty) {
-        final rpcResponse = await supabase.rpc(
-          'search_cuidadores',
-          params: {'search_term': searchTerm},
-        );
-        final List<String> matchingIds = (rpcResponse as List)
-            .map((e) => e.toString())
-            .toList();
-        if (matchingIds.isEmpty) {
-          if (mounted) {
-            setState(() {
-              _caregivers.clear();
-              _hasMore = false;
-              _isLoading = false;
-            });
-          }
-          return;
-        }
-        query = query.inFilter('id', matchingIds);
+      final List<CaregiverProfile> newCaregivers = await _caregiverService
+          .getCaregivers(
+            searchTerm: _searchController.text.trim().isNotEmpty
+                ? _searchController.text.trim()
+                : null,
+            city: _cityController.text.trim().isNotEmpty
+                ? _cityController.text.trim()
+                : null,
+            state: _stateController.text.trim().isNotEmpty
+                ? _stateController.text.trim()
+                : null,
+            priceRange: _priceRange,
+            onlyHealthProfessionals: _filtraFormacaoSaude,
+            availability: _selectedAvailability,
+            sortOrder: _sortOrder,
+            limit: _pageSize,
+            offset: from,
+          );
+
+      if (newCaregivers.length < _pageSize) {
+        _hasMore = false;
       }
-      final city = _cityController.text.trim();
-      final state = _stateController.text.trim();
-      if (city.isNotEmpty) query = query.eq('usuarios.city', city);
-      if (state.isNotEmpty) query = query.eq('usuarios.state', state);
-      query = query
-          .gte('hourly_rate', _priceRange.start)
-          .lte('hourly_rate', _priceRange.end);
-      if (_filtraFormacaoSaude) {
-        query = query.eq('formacao_saude', true);
-      }
-      if (_selectedAvailability != null) {
-        if (_selectedAvailability == "Finais de Semana") {
-          query = query.ilike('availability', '%Fins de Semana%');
-        } else if (_selectedAvailability == "Dias de Semana") {
-          query = query.not('availability', 'ilike', '%Fins de Semana%');
-        }
-      }
-      if (_sortOrder == 'rating_desc') {
-        query = query.order(
-          'avaliacao_media',
-          ascending: false,
-          nullsFirst: false,
-        );
-      } else if (_sortOrder == 'rating_asc') {
-        query = query.order(
-          'avaliacao_media',
-          ascending: true,
-          nullsFirst: false,
-        );
-      } else if (_sortOrder == 'price_asc') {
-        query = query.order('hourly_rate', ascending: true, nullsFirst: false);
-      } else if (_sortOrder == 'price_desc') {
-        query = query.order('hourly_rate', ascending: false, nullsFirst: false);
-      }
-      final response = await query.range(from, to);
-      final List<CaregiverProfile> newCaregivers = response
-          .map<CaregiverProfile>((data) => CaregiverProfile.fromSupabase(data))
-          .toList();
-      if (newCaregivers.length < _pageSize) _hasMore = false;
+
       if (mounted) {
         setState(() {
           _caregivers.addAll(newCaregivers);
@@ -188,8 +151,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao carregar cuidadores: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -201,27 +164,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _carregarCidades() async {
-    if (_todasCidadesComUF.isNotEmpty || _isLoadingApi) return;
-    _isLoadingApi = true;
+    if (LocationService.citiesCache.isNotEmpty) {
+      setState(() {
+        _todasCidadesComUF = LocationService.citiesCache;
+      });
+      return;
+    }
+
+    if (_isLocalLoading) return;
+
     if (mounted) setState(() => _isLocalLoading = true);
     try {
-      final url = Uri.parse(
-        'https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome',
-      );
-      final response = await http.get(url);
-      if (response.statusCode == 200 && mounted) {
-        final List<dynamic> data = json.decode(response.body);
-        _todasCidadesComUF = data.map((item) {
-          final String nome = item['nome'];
-          final String uf =
-              item['regiao-imediata']['regiao-intermediaria']['UF']['sigla'];
-          return "$nome, $uf";
-        }).toList();
-      }
+      _todasCidadesComUF = await LocationService.getBrazilianCities();
     } catch (e) {
       debugPrint("Erro ao carregar cidades: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll("Exception: ", "")),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
-      _isLoadingApi = false;
       if (mounted) {
         setState(() => _isLocalLoading = false);
       }
@@ -368,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   icon: const Icon(Icons.search, size: 18),
                   label: const Text('Pesquisar'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -485,11 +450,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(width: 6),
-              Icon(
-                Icons.health_and_safety,
-                color: Colors.blue.shade700,
-                size: 20,
-              ),
+              Icon(Icons.health_and_safety, color: AppColors.primary, size: 20),
             ],
           ),
         ),
@@ -507,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 min: 0,
                 max: 500,
                 divisions: 50,
+                activeColor: AppColors.primary,
                 labels: RangeLabels(
                   'R\$${_priceRange.start.round()}',
                   'R\$${_priceRange.end.round()}',
@@ -552,7 +514,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Icons.arrow_downward,
                         size: 18,
                         color: _sortOrder == 'rating_desc'
-                            ? Colors.indigo
+                            ? AppColors.primary
                             : Colors.grey,
                       ),
                       const SizedBox(width: 8),
@@ -568,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Icons.arrow_upward,
                         size: 18,
                         color: _sortOrder == 'rating_asc'
-                            ? Colors.indigo
+                            ? AppColors.primary
                             : Colors.grey,
                       ),
                       const SizedBox(width: 8),
@@ -585,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Icons.arrow_upward,
                         size: 18,
                         color: _sortOrder == 'price_asc'
-                            ? Colors.indigo
+                            ? AppColors.primary
                             : Colors.grey,
                       ),
                       const SizedBox(width: 8),
@@ -601,7 +563,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Icons.arrow_downward,
                         size: 18,
                         color: _sortOrder == 'price_desc'
-                            ? Colors.indigo
+                            ? AppColors.primary
                             : Colors.grey,
                       ),
                       const SizedBox(width: 8),
@@ -632,9 +594,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
     if (_caregivers.isEmpty) {
       return const Center(
-        child: Text(
-          'Nenhum cuidador encontrado.\nTente ajustar seus filtros.',
-          textAlign: TextAlign.center,
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text(
+            'Nenhum cuidador encontrado.\nTente ajustar seus filtros.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
         ),
       );
     }

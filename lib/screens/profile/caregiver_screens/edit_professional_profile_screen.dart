@@ -1,9 +1,10 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
-import 'package:careconnect_app/screens/auth/register_caregiver/widgets/step2_professional.dart';
+import 'package:careconnect_app/services/caregiver_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart';
 
 class EditProfessionalProfileScreen extends StatefulWidget {
   final CaregiverProfile caregiverProfile;
@@ -20,6 +21,8 @@ class EditProfessionalProfileScreen extends StatefulWidget {
 
 class _EditProfessionalProfileScreenState
     extends State<EditProfessionalProfileScreen> {
+  final CaregiverService _caregiverService = CaregiverService();
+
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
@@ -140,11 +143,11 @@ class _EditProfessionalProfileScreenState
     setState(() => _isLoading = true);
 
     try {
-      final userId = supabase.auth.currentUser!.id;
       final priceString = _hourlyRateController.text
           .replaceAll('.', '')
           .replaceAll(',', '.');
       final hourlyRate = double.tryParse(priceString) ?? 0.0;
+
       final availability =
           '${_availabilityDaysNotifier.value}, ${_availabilityTimeNotifier.value}';
 
@@ -159,26 +162,26 @@ class _EditProfessionalProfileScreenState
         'availability': availability,
       };
 
-      await supabase
-          .from('cuidadores')
-          .update(updates)
-          .eq('usuario_id', userId);
+      await _caregiverService.updateProfile(
+        widget.caregiverProfile.usuario_id,
+        updates,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Perfil profissional atualizado com sucesso!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } on PostgrestException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro: ${error.message}'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -186,8 +189,8 @@ class _EditProfessionalProfileScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ocorreu um erro: $e'),
-            backgroundColor: Colors.red,
+            content: Text('Ocorreu um erro: ${e.toString()}'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -231,12 +234,12 @@ class _EditProfessionalProfileScreenState
                 labelText: 'Profissão Principal*',
                 hintText: 'Ex: Cuidador de Idosos, Técnico de Enfermagem',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.work_outline),
               ),
               validator: (value) => _validateRequired(value, 'Profissão'),
               textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _experienceController,
               decoration: const InputDecoration(
@@ -245,13 +248,13 @@ class _EditProfessionalProfileScreenState
                     'Descreva sua trajetória, habilidades e motivações...',
                 border: OutlineInputBorder(),
                 alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.description_outlined),
               ),
               maxLines: 5,
               validator: (value) => _validateRequired(value, 'Experiência'),
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 16),
-
             ValueListenableBuilder<bool>(
               valueListenable: _formacaoSaudeNotifier,
               builder: (context, isChecked, _) {
@@ -266,7 +269,7 @@ class _EditProfessionalProfileScreenState
                   },
                   secondary: Icon(
                     Icons.health_and_safety,
-                    color: Colors.blue.shade700,
+                    color: AppColors.primary,
                   ),
                   dense: true,
                   contentPadding: EdgeInsets.zero,
@@ -275,12 +278,12 @@ class _EditProfessionalProfileScreenState
               },
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _yearsExperienceController,
               decoration: const InputDecoration(
                 labelText: 'Anos de Experiência*',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.calendar_today_outlined),
               ),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -288,7 +291,6 @@ class _EditProfessionalProfileScreenState
                   _validateRequired(value, 'Anos de Experiência'),
             ),
             const SizedBox(height: 16),
-
             ValueListenableBuilder<List<String>>(
               valueListenable: _selectedSpecialtiesNotifier,
               builder: (context, selectedSpecialties, _) {
@@ -301,6 +303,7 @@ class _EditProfessionalProfileScreenState
                         labelText: 'Especialidades (Opcional)',
                         hintText: 'Digite e pressione ENTER (Ex: Alzheimer)',
                         border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.star_outline),
                         suffixIcon: Icon(Icons.add),
                       ),
                       onSubmitted: _addSpecialty,
@@ -328,7 +331,6 @@ class _EditProfessionalProfileScreenState
               },
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _hourlyRateController,
               decoration: const InputDecoration(
@@ -336,6 +338,7 @@ class _EditProfessionalProfileScreenState
                 hintText: 'Ex: 30,00',
                 border: OutlineInputBorder(),
                 prefixText: 'R\$ ',
+                prefixIcon: Icon(Icons.attach_money_outlined),
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
@@ -344,7 +347,6 @@ class _EditProfessionalProfileScreenState
               validator: (value) => _validateNumber(value, 'Preço por Hora'),
             ),
             const SizedBox(height: 16),
-
             ValueListenableBuilder<String?>(
               valueListenable: _availabilityDaysNotifier,
               builder: (context, value, _) {
@@ -353,6 +355,7 @@ class _EditProfessionalProfileScreenState
                   decoration: const InputDecoration(
                     labelText: 'Disponibilidade (Dias)*',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.date_range_outlined),
                   ),
                   items: _availabilityDayOptions.map((String day) {
                     return DropdownMenuItem<String>(
@@ -369,7 +372,6 @@ class _EditProfessionalProfileScreenState
               },
             ),
             const SizedBox(height: 16),
-
             ValueListenableBuilder<String?>(
               valueListenable: _availabilityTimeNotifier,
               builder: (context, value, _) {
@@ -378,6 +380,7 @@ class _EditProfessionalProfileScreenState
                   decoration: const InputDecoration(
                     labelText: 'Disponibilidade (Período)*',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.access_time_outlined),
                   ),
                   items: _availabilityTimeOptions.map((String time) {
                     return DropdownMenuItem<String>(
@@ -398,7 +401,7 @@ class _EditProfessionalProfileScreenState
               onPressed: _isLoading ? null : _updateProfessionalProfile,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.indigo,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 textStyle: const TextStyle(
                   fontSize: 16,

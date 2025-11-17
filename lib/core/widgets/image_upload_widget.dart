@@ -6,11 +6,13 @@ import 'dart:io';
 class ImageUploadWidget extends StatelessWidget {
   final ValueNotifier<XFile?> profileImageNotifier;
   final ImagePicker imagePicker;
+  final String? initialImageUrl;
 
   const ImageUploadWidget({
     super.key,
     required this.profileImageNotifier,
     required this.imagePicker,
+    this.initialImageUrl,
   });
 
   Future<void> _pickImage() async {
@@ -33,7 +35,7 @@ class ImageUploadWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Foto de Perfil*', style: Theme.of(context).textTheme.titleMedium),
+        Text('Foto de Perfil', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -41,21 +43,25 @@ class ImageUploadWidget extends StatelessWidget {
           children: [
             ValueListenableBuilder<XFile?>(
               valueListenable: profileImageNotifier,
-              builder: (context, image, child) {
+              builder: (context, newImage, child) {
                 ImageProvider? backgroundImage;
-                if (image != null) {
+
+                if (newImage != null) {
                   if (kIsWeb) {
-                    backgroundImage = NetworkImage(image.path);
+                    backgroundImage = NetworkImage(newImage.path);
                   } else {
-                    backgroundImage = FileImage(File(image.path));
+                    backgroundImage = FileImage(File(newImage.path));
                   }
+                } else if (initialImageUrl != null &&
+                    initialImageUrl!.isNotEmpty) {
+                  backgroundImage = NetworkImage(initialImageUrl!);
                 }
 
                 return CircleAvatar(
                   radius: 60,
                   backgroundColor: Colors.grey.shade200,
                   backgroundImage: backgroundImage,
-                  child: image == null
+                  child: (backgroundImage == null)
                       ? const Icon(Icons.person, size: 60, color: Colors.grey)
                       : null,
                 );

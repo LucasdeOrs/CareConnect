@@ -1,7 +1,6 @@
-// lib/screens/profile/widgets/advanced_block_dialog.dart
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class AdvancedBlockDialog extends StatefulWidget {
   const AdvancedBlockDialog({super.key});
@@ -13,12 +12,11 @@ class AdvancedBlockDialog extends StatefulWidget {
 class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores de estado do formulário
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   DateTime? _startDate;
   DateTime? _endDate;
-  // Lista de booleanos para [Seg, Ter, Qua, Qui, Sex, Sab, Dom]
+
   final List<bool> _selectedWeekdays = [
     false,
     false,
@@ -31,7 +29,6 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
 
   bool _isLoading = false;
 
-  /// Constrói o seletor de dias da semana
   Widget _buildWeekdaySelector() {
     final weekdays = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
     return ToggleButtons(
@@ -43,36 +40,38 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
       },
       borderRadius: BorderRadius.circular(8),
       constraints: const BoxConstraints(minHeight: 40, minWidth: 40),
+      color: AppColors.primary,
+      selectedColor: Colors.white,
+      fillColor: AppColors.primary,
+      // ignore: deprecated_member_use
+      borderColor: AppColors.primary.withOpacity(0.5),
+      selectedBorderColor: AppColors.primary,
       children: List<Widget>.generate(7, (int index) {
         return Text(weekdays[index]);
       }),
     );
   }
 
-  /// Mostra um DatePicker e atualiza o estado
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final now = DateTime.now();
     final initialDate = isStartDate
-        ? (_startDate ?? DateTime.now())
-        : (_endDate ?? _startDate ?? DateTime.now());
+        ? (_startDate ?? now)
+        : (_endDate ?? _startDate ?? now);
 
-    final firstDate = isStartDate
-        ? DateTime.now()
-        : (_startDate ?? DateTime.now());
+    final firstDate = isStartDate ? now : (_startDate ?? now);
 
     final newDate = await showDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: firstDate,
-      lastDate: DateTime.now().add(
-        const Duration(days: 365 * 2),
-      ), // 2 anos no futuro
+      lastDate: now.add(const Duration(days: 365 * 2)),
+      locale: const Locale('pt', 'BR'),
     );
 
     if (newDate != null) {
       setState(() {
         if (isStartDate) {
           _startDate = newDate;
-          // Se a data final for anterior à nova data inicial, reseta a data final
           if (_endDate != null && _endDate!.isBefore(_startDate!)) {
             _endDate = null;
           }
@@ -83,7 +82,6 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
     }
   }
 
-  /// Mostra um TimePicker e atualiza o estado
   Future<void> _selectTime(BuildContext context, bool isStartTime) async {
     final initialTime = isStartTime
         ? (_startTime ?? const TimeOfDay(hour: 9, minute: 0))
@@ -108,30 +106,27 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
     }
   }
 
-  /// Valida e submete o formulário
   void _submit() {
     if (_isLoading) return;
 
     if (_formKey.currentState!.validate()) {
-      // Validação 1: Pelo menos um dia da semana
       if (!_selectedWeekdays.any((day) => day)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Selecione pelo menos um dia da semana.'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
       }
 
-      // Validação 2: Horário de fim > horário de início
       final inicioDouble = _startTime!.hour + (_startTime!.minute / 60.0);
       final fimDouble = _endTime!.hour + (_endTime!.minute / 60.0);
       if (fimDouble <= inicioDouble) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('A hora de fim deve ser depois da hora de início.'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
         return;
@@ -139,7 +134,6 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
 
       setState(() => _isLoading = true);
 
-      // Retorna os dados para a tela anterior (MinhaAgendaScreen)
       Navigator.pop(context, {
         'startTime': _startTime,
         'endTime': _endTime,
@@ -152,13 +146,12 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Formata as datas e horas para os botões
     final startDateText = _startDate == null
         ? 'Data Início'
-        : DateFormat('dd/MM/yyyy').format(_startDate!);
+        : AppFormatters.date.format(_startDate!);
     final endDateText = _endDate == null
         ? 'Data Fim'
-        : DateFormat('dd/MM/yyyy').format(_endDate!);
+        : AppFormatters.date.format(_endDate!);
     final startTimeText = _startTime == null
         ? 'Hora Início'
         : _startTime!.format(context);
@@ -179,14 +172,17 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Bloqueio Avançado',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 24),
 
-            // Seleção de Horário
             Text(
               '1. Selecione o horário a ser bloqueado:',
               style: Theme.of(context).textTheme.titleMedium,
@@ -211,7 +207,6 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
                 ),
               ],
             ),
-            // Validador "fantasma" para os horários
             FormField(
               validator: (_) {
                 if (_startTime == null || _endTime == null) {
@@ -263,7 +258,6 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
                 ),
               ],
             ),
-            // Validador "fantasma" para as datas
             FormField(
               validator: (_) {
                 if (_startDate == null || _endDate == null) {
@@ -286,7 +280,7 @@ class _AdvancedBlockDialogState extends State<AdvancedBlockDialog> {
             ElevatedButton(
               onPressed: _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),

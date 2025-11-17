@@ -1,3 +1,4 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class PaymentSuccessScreen extends StatelessWidget {
@@ -16,15 +17,16 @@ class PaymentSuccessScreen extends StatelessWidget {
             children: [
               Icon(
                 Icons.check_circle_outline,
-                color: Colors.green.shade700,
+                color: AppColors.success.shade700,
                 size: 100,
               ),
               const SizedBox(height: 24),
               Text(
                 'Pagamento Aprovado!',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -34,11 +36,14 @@ class PaymentSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 32,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.indigo.shade50,
+                  color: AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.indigo.shade100),
+                  border: Border.all(color: AppColors.primary.shade100),
                 ),
                 child: Text(
                   agendamento['codigo_confirmacao'] ?? 'ERRO',
@@ -46,16 +51,19 @@ class PaymentSuccessScreen extends StatelessWidget {
                     fontSize: 40,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 8,
-                    color: Colors.indigo,
+                    color: AppColors.primary,
                   ),
                 ),
               ),
               const SizedBox(height: 32),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 12,
+                  ),
                 ),
                 onPressed: () {
                   Navigator.of(context).popUntil((route) => route.isFirst);

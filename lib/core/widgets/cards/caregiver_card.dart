@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../models/caregiver_profile.dart';
+import '../../../models/caregiver_profile.dart';
 
 class CaregiverCard extends StatelessWidget {
   final CaregiverProfile caregiver;

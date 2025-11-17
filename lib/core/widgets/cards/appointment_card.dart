@@ -1,13 +1,20 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/models/patient_model.dart';
+import 'package:careconnect_app/models/user_model.dart';
 import 'package:careconnect_app/screens/chat/chat_screen.dart';
 import 'package:careconnect_app/screens/payment/payment_screen.dart';
+import 'package:careconnect_app/services/appointment_service.dart';
+import 'package:careconnect_app/services/auth_service.dart';
 import 'package:careconnect_app/services/chat_service.dart';
+import 'package:careconnect_app/services/patient_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../main.dart';
 import '../../../models/appointment_model.dart';
 import '../../../models/caregiver_profile.dart';
-import 'report_dialog.dart';
-import 'review_dialog.dart';
+import '../../../screens/appointment/widgets/report_dialog.dart';
+import '../../../screens/appointment/widgets/review_dialog.dart';
 
 class AppointmentCard extends StatelessWidget {
   final AppointmentDetails agendamento;
@@ -15,7 +22,11 @@ class AppointmentCard extends StatelessWidget {
   final Function(String newStatus) onUpdateStatus;
   final VoidCallback onReviewSubmitted;
 
-  const AppointmentCard({
+  final PatientService _patientService = PatientService();
+  final AppointmentService _appointmentService = AppointmentService();
+  final AuthService _authService = AuthService();
+
+  AppointmentCard({
     super.key,
     required this.agendamento,
     required this.userType,
@@ -24,18 +35,24 @@ class AppointmentCard extends StatelessWidget {
   });
 
   void _showChangePatientDialog(BuildContext context) async {
-    final response = await supabase
-        .from('pacientes')
-        .select('id, nome')
-        .eq('familiar_id', agendamento.familiarId)
-        .order('nome', ascending: true);
-
-    final List<Map<String, dynamic>> patients = List<Map<String, dynamic>>.from(
-      response,
-    );
+    List<Map<String, dynamic>> patients = [];
+    try {
+      patients = await _patientService.getSimplePatients(
+        agendamento.familiarId,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
 
     String? selectedId = agendamento.paciente?.id;
-
     if (!context.mounted) return;
 
     showDialog(
@@ -81,22 +98,33 @@ class AppointmentCard extends StatelessWidget {
                     if (localSelectedId != null &&
                         localSelectedId != agendamento.paciente?.id) {
                       try {
-                        await supabase
-                            .from('agendamentos')
-                            .update({'paciente_id': localSelectedId})
-                            .eq('id', agendamento.id);
+                        await _appointmentService.updateAppointmentPatient(
+                          agendamento.id,
+                          localSelectedId!,
+                        );
 
                         if (context.mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Paciente atualizado!'),
+                              backgroundColor: AppColors.success,
                             ),
                           );
                           onReviewSubmitted();
                         }
                       } catch (e) {
                         debugPrint('Erro ao trocar paciente: $e');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                e.toString().replaceAll('Exception: ', ''),
+                              ),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
                       }
                     } else {
                       Navigator.pop(context);
@@ -113,6 +141,14 @@ class AppointmentCard extends StatelessWidget {
   }
 
   Future<void> _openChat(BuildContext context) async {
+    final currentUser = _authService.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Erro: Usuário não autenticado.')),
+      );
+      return;
+    }
+
     try {
       final familiarId = agendamento.familiarId;
       final cuidadorId = agendamento.cuidadorId;
@@ -138,7 +174,7 @@ class AppointmentCard extends StatelessWidget {
               conversaId: conversaId,
               otherUserName: otherUserName,
               otherUserAvatar: otherUserAvatar,
-              currentUserId: supabase.auth.currentUser!.id,
+              currentUserId: currentUser.id,
             ),
           ),
         );
@@ -147,8 +183,8 @@ class AppointmentCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao abrir chat: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -258,7 +294,7 @@ class AppointmentCard extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Código incorreto!'),
-                        backgroundColor: Colors.red,
+                        backgroundColor: AppColors.error,
                       ),
                     );
                   }
@@ -289,7 +325,7 @@ class AppointmentCard extends StatelessWidget {
               onUpdateStatus('recusado');
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Sim, Recusar'),
@@ -316,7 +352,7 @@ class AppointmentCard extends StatelessWidget {
               onUpdateStatus('cancelado');
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Sim, Cancelar'),
@@ -343,7 +379,7 @@ class AppointmentCard extends StatelessWidget {
               onUpdateStatus('cancelado');
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Sim, Cancelar'),
@@ -379,15 +415,12 @@ class AppointmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final SimpleUser otherUser = (userType == 'cuidador')
+    final UserModel otherUser = (userType == 'cuidador')
         ? agendamento.familiar
         : agendamento.cuidador;
 
-    final currencyFormat = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final currencyFormat = AppFormatters.currency;
+    final dateFormat = AppFormatters.date;
 
     final now = DateTime.now();
     final agendamentoData = agendamento.dataAgendamento;
@@ -408,38 +441,40 @@ class AppointmentCard extends StatelessWidget {
 
     final bool isFamiliarPendingPayment =
         (userType == 'familiar' &&
-        agendamento.status == 'aguardando_pagamento');
+        agendamento.status == AppointmentStatus.aguardandoPagamento);
     final bool isCaregiverPending =
-        (userType == 'cuidador' && agendamento.status == 'pago');
+        (userType == 'cuidador' &&
+        agendamento.status == AppointmentStatus.pago);
     final bool isCaregiverConfirmed =
         (userType == 'cuidador' &&
-        agendamento.status == 'confirmado' &&
+        agendamento.status == AppointmentStatus.confirmado &&
         isServiceDayOrLater);
     final bool isCaregiverCanCancelAcceptance =
         (userType == 'cuidador' &&
-        agendamento.status == 'confirmado' &&
+        agendamento.status == AppointmentStatus.confirmado &&
         !isServiceDayOrLater);
     final bool isFamiliarShowCode =
         (userType == 'familiar' &&
-        (agendamento.status == 'pago' || agendamento.status == 'confirmado'));
+        (agendamento.status == AppointmentStatus.pago ||
+            agendamento.status == AppointmentStatus.confirmado));
     final bool isFamiliarCanCancel =
         (userType == 'familiar' &&
-        (agendamento.status == 'aguardando_pagamento' ||
-            agendamento.status == 'pago' ||
-            agendamento.status == 'confirmado') &&
+        (agendamento.status == AppointmentStatus.aguardandoPagamento ||
+            agendamento.status == AppointmentStatus.pago ||
+            agendamento.status == AppointmentStatus.confirmado) &&
         canCancelTimeLimit);
     final bool isFinished =
-        (agendamento.status == 'concluido' ||
-        agendamento.status == 'recusado' ||
-        agendamento.status == 'cancelado');
+        (agendamento.status == AppointmentStatus.concluido ||
+        agendamento.status == AppointmentStatus.recusado ||
+        agendamento.status == AppointmentStatus.cancelado);
     final bool isFamiliarCanReview =
         (userType == 'familiar' &&
-        agendamento.status == 'concluido' &&
+        agendamento.status == AppointmentStatus.concluido &&
         !agendamento.avaliado);
     final bool isFamiliarCanChangePatient =
         (userType == 'familiar' &&
-        (agendamento.status == 'aguardando_pagamento' ||
-            agendamento.status == 'pago'));
+        (agendamento.status == AppointmentStatus.aguardandoPagamento ||
+            agendamento.status == AppointmentStatus.pago));
 
     return Card(
       elevation: 1,
@@ -502,25 +537,25 @@ class AppointmentCard extends StatelessWidget {
 
   Widget _buildPatientInfo(
     BuildContext context,
-    SimplePatient paciente, {
+    PatientModel paciente, {
     bool canEdit = false,
     bool canViewDetails = false,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.teal.shade50,
+        color: AppColors.secondary.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.teal.shade100),
+        border: Border.all(color: AppColors.secondary.shade100),
       ),
       child: Row(
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: Colors.teal.shade100,
+            backgroundColor: AppColors.secondary.shade100,
             child: const Icon(
               Icons.person_outline,
-              color: Colors.teal,
+              color: AppColors.secondary,
               size: 20,
             ),
           ),
@@ -533,19 +568,25 @@ class AppointmentCard extends StatelessWidget {
                   'Paciente: ${paciente.nome}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.teal,
+                    color: AppColors.secondary,
                   ),
                 ),
                 if (paciente.idade != null)
                   Text(
                     '${paciente.idade} anos',
-                    style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondary.shade900,
+                    ),
                   ),
                 if (paciente.condicoes != null &&
                     paciente.condicoes!.isNotEmpty)
                   Text(
                     paciente.condicoes!,
-                    style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.secondary.shade900,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -554,7 +595,11 @@ class AppointmentCard extends StatelessWidget {
           ),
           if (canEdit)
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.teal, size: 20),
+              icon: const Icon(
+                Icons.edit,
+                color: AppColors.secondary,
+                size: 20,
+              ),
               tooltip: 'Trocar Paciente',
               onPressed: () => _showChangePatientDialog(context),
             ),
@@ -562,7 +607,7 @@ class AppointmentCard extends StatelessWidget {
             IconButton(
               icon: const Icon(
                 Icons.info_outline,
-                color: Colors.teal,
+                color: AppColors.secondary,
                 size: 20,
               ),
               tooltip: 'Ver Detalhes e Rotina',
@@ -573,7 +618,7 @@ class AppointmentCard extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, SimpleUser otherUser) {
+  Widget _buildHeader(BuildContext context, UserModel otherUser) {
     return Row(
       children: [
         CircleAvatar(
@@ -605,14 +650,14 @@ class AppointmentCard extends StatelessWidget {
           ),
         ),
         if (userType == 'familiar' &&
-            (agendamento.status == 'confirmado' ||
-                agendamento.status == 'concluido' ||
-                agendamento.status == 'cancelado' ||
-                agendamento.status == 'pago'))
+            (agendamento.status == AppointmentStatus.confirmado ||
+                agendamento.status == AppointmentStatus.concluido ||
+                agendamento.status == AppointmentStatus.cancelado ||
+                agendamento.status == AppointmentStatus.pago))
           _buildReportButton(context),
-        if (agendamento.status == 'pago' ||
-            agendamento.status == 'confirmado' ||
-            agendamento.status == 'concluido')
+        if (agendamento.status == AppointmentStatus.pago ||
+            agendamento.status == AppointmentStatus.confirmado ||
+            agendamento.status == AppointmentStatus.concluido)
           _buildChatButton(context),
       ],
     );
@@ -640,7 +685,7 @@ class AppointmentCard extends StatelessWidget {
           icon: const Icon(Icons.payment),
           label: const Text('Concluir Pagamento'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green.shade700,
+            backgroundColor: AppColors.success.shade700,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
@@ -649,7 +694,7 @@ class AppointmentCard extends StatelessWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Erro: Dados do cuidador não encontrados.'),
-                  backgroundColor: Colors.red,
+                  backgroundColor: AppColors.error,
                 ),
               );
               return;
@@ -672,42 +717,6 @@ class AppointmentCard extends StatelessWidget {
     );
   }
 
-  String _getStatusText(String status) {
-    switch (status) {
-      case 'aguardando_pagamento':
-        return 'AGUARDANDO PAGAMENTO';
-      case 'pago':
-        return 'AGUARDANDO ACEITE';
-      case 'confirmado':
-        return 'CONFIRMADO';
-      case 'concluido':
-        return 'CONCLUÍDO';
-      case 'recusado':
-        return 'RECUSADO';
-      case 'cancelado':
-        return 'CANCELADO';
-      default:
-        return status.toUpperCase();
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'aguardando_pagamento':
-      case 'pago':
-        return Colors.orange.shade700;
-      case 'confirmado':
-        return Colors.blue.shade700;
-      case 'concluido':
-        return Colors.green.shade700;
-      case 'recusado':
-      case 'cancelado':
-        return Colors.red.shade700;
-      default:
-        return Colors.grey.shade700;
-    }
-  }
-
   Widget _buildStatusAndPrice(
     BuildContext context,
     NumberFormat currencyFormat,
@@ -720,10 +729,10 @@ class AppointmentCard extends StatelessWidget {
           children: [
             Text('Status:', style: Theme.of(context).textTheme.bodySmall),
             Text(
-              _getStatusText(agendamento.status),
+              agendamento.status.label,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: _getStatusColor(agendamento.status),
+                color: agendamento.status.color,
               ),
             ),
           ],
@@ -736,7 +745,7 @@ class AppointmentCard extends StatelessWidget {
               currencyFormat.format(agendamento.valorTotal),
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.green,
+                color: AppColors.success,
               ),
             ),
           ],
@@ -754,8 +763,8 @@ class AppointmentCard extends StatelessWidget {
             child: OutlinedButton(
               onPressed: () => _showRecusarDialog(context),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
               ),
               child: const Text('Recusar'),
             ),
@@ -765,7 +774,7 @@ class AppointmentCard extends StatelessWidget {
             child: ElevatedButton(
               onPressed: () => onUpdateStatus('confirmado'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green.shade700,
+                backgroundColor: AppColors.success.shade700,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Aceitar'),
@@ -785,7 +794,7 @@ class AppointmentCard extends StatelessWidget {
           icon: const Icon(Icons.check_circle),
           label: const Text('Finalizar Serviço'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.indigo,
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
@@ -806,8 +815,8 @@ class AppointmentCard extends StatelessWidget {
           icon: const Icon(Icons.cancel_schedule_send_outlined),
           label: const Text('Cancelar Aceite'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.red,
-            side: const BorderSide(color: Colors.red),
+            foregroundColor: AppColors.error,
+            side: const BorderSide(color: AppColors.error),
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
           onPressed: () {
@@ -826,9 +835,9 @@ class AppointmentCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: AppColors.primaryLight,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.blue.shade100),
+          border: Border.all(color: AppColors.primary.shade100),
         ),
         child: Column(
           children: [
@@ -849,7 +858,7 @@ class AppointmentCard extends StatelessWidget {
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 8,
-                color: Colors.indigo,
+                color: AppColors.primary,
               ),
             ),
           ],
@@ -867,8 +876,8 @@ class AppointmentCard extends StatelessWidget {
           icon: const Icon(Icons.cancel_outlined),
           label: const Text('Cancelar Agendamento'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.red,
-            side: const BorderSide(color: Colors.red),
+            foregroundColor: AppColors.error,
+            side: const BorderSide(color: AppColors.error),
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
           onPressed: () {
@@ -881,7 +890,7 @@ class AppointmentCard extends StatelessWidget {
 
   Widget _buildReportButton(BuildContext context) {
     return IconButton(
-      icon: Icon(Icons.warning_amber_rounded, color: Colors.red.shade700),
+      icon: Icon(Icons.warning_amber_rounded, color: AppColors.error.shade700),
       tooltip: 'Reportar Cuidador',
       onPressed: () {
         _showReportDialog(context);
@@ -891,7 +900,10 @@ class AppointmentCard extends StatelessWidget {
 
   Widget _buildChatButton(BuildContext context) {
     return IconButton(
-      icon: Icon(Icons.chat_bubble_outline_rounded, color: Colors.indigo),
+      icon: const Icon(
+        Icons.chat_bubble_outline_rounded,
+        color: AppColors.primary,
+      ),
       tooltip: 'Abrir Chat',
       onPressed: () => _openChat(context),
     );
@@ -906,7 +918,7 @@ class AppointmentCard extends StatelessWidget {
           icon: const Icon(Icons.star_half_rounded),
           label: const Text('Avalie o Serviço'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.amber.shade700,
+            backgroundColor: AppColors.warning.shade700,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),

@@ -1,9 +1,10 @@
-// [COLE ISTO EM lib/screens/payment/payment_screen.dart]
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/services/payment_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../main.dart';
 import '../../models/caregiver_profile.dart';
 import 'payment_success_screen.dart';
 
@@ -23,12 +24,12 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen>
     with SingleTickerProviderStateMixin {
+  final PaymentService _paymentService = PaymentService();
+
   late TabController _tabController;
   Map<String, dynamic>? _agendamento;
   bool _isLoading = true;
   bool _isProcessing = false;
-
-  final double _platformFeeRate = 0.15;
 
   @override
   void initState() {
@@ -37,13 +38,17 @@ class _PaymentScreenState extends State<PaymentScreen>
     _fetchAgendamento();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchAgendamento() async {
     try {
-      final response = await supabase
-          .from('agendamentos')
-          .select()
-          .eq('id', widget.agendamentoId)
-          .single();
+      final response = await _paymentService.fetchAppointmentDetails(
+        widget.agendamentoId,
+      );
       setState(() {
         _agendamento = response;
         _isLoading = false;
@@ -52,8 +57,8 @@ class _PaymentScreenState extends State<PaymentScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao carregar agendamento: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
         Navigator.pop(context);
@@ -66,38 +71,17 @@ class _PaymentScreenState extends State<PaymentScreen>
     setState(() => _isProcessing = true);
 
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('Usuário não autenticado');
+      final valorBruto = (_agendamento!['valor_total'] as num).toDouble();
 
-      final valorBruto = _agendamento!['valor_total'];
-      final taxa = valorBruto * _platformFeeRate;
-      final valorLiquido = valorBruto - taxa;
+      final String metodoPagamento = _tabController.index == 0
+          ? PaymentMethod.pix.dbValue
+          : PaymentMethod.creditCard.dbValue;
 
-      await supabase.from('pagamentos').insert({
-        'agendamento_id': widget.agendamentoId,
-        'pagador_id': user.id,
-        'recebedor_id': widget.caregiver.id,
-        'valor_bruto': valorBruto,
-        'taxa_plataforma': taxa,
-        'valor_liquido_recebedor': valorLiquido,
-        'status_pagamento': 'sucedido',
-        'metodo_pagamento': _tabController.index == 0
-            ? 'pix'
-            : 'cartao_credito',
-      });
-
-      final updatedAgendamento = await supabase
-          .from('agendamentos')
-          .update({'status': 'pago'})
-          .eq('id', widget.agendamentoId)
-          .select()
-          .single();
-      await supabase.rpc(
-        'increment_saldo_pendente',
-        params: {
-          'cuidador_uuid': widget.caregiver.id,
-          'valor_adicao': valorLiquido,
-        },
+      final updatedAgendamento = await _paymentService.processPayment(
+        agendamentoId: widget.agendamentoId,
+        recebedorId: widget.caregiver.id,
+        valorBruto: valorBruto,
+        metodo: metodoPagamento,
       );
 
       if (mounted) {
@@ -113,8 +97,8 @@ class _PaymentScreenState extends State<PaymentScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao processar pagamento: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -125,10 +109,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+    final currencyFormat = AppFormatters.currency;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Pagamento')),
@@ -139,6 +120,9 @@ class _PaymentScreenState extends State<PaymentScreen>
                 _buildOrderSummary(currencyFormat),
                 TabBar(
                   controller: _tabController,
+                  indicatorColor: AppColors.primary,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: Colors.grey.shade600,
                   tabs: const [
                     Tab(icon: Icon(Icons.pix), text: 'PIX'),
                     Tab(
@@ -155,9 +139,8 @@ class _PaymentScreenState extends State<PaymentScreen>
                 ),
               ],
             ),
-      // [MUDANÇA] Verificamos se está carregando ANTES de construir o botão
       bottomNavigationBar: _isLoading
-          ? const SizedBox.shrink() // Não mostra nada se estiver carregando
+          ? const SizedBox.shrink()
           : _buildPaymentButton(currencyFormat),
     );
   }
@@ -192,9 +175,9 @@ class _PaymentScreenState extends State<PaymentScreen>
             _buildInfoRow(
               Icons.calendar_today,
               'Data',
-              DateFormat(
-                'dd/MM/yyyy',
-              ).format(DateTime.parse(_agendamento!['data_agendamento'])),
+              AppFormatters.date.format(
+                DateTime.parse(_agendamento!['data_agendamento']),
+              ),
             ),
             _buildInfoRow(
               Icons.access_time,
@@ -219,7 +202,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: Colors.indigo,
+                    color: AppColors.primary,
                   ),
                 ),
               ],
@@ -246,7 +229,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   Widget _buildPixTab(NumberFormat currencyFormat) {
     final pixCode =
-        '00020126330014br.gov.bcb.pix0111${widget.caregiver.id}520400005303986540${_agendamento!['valor_total'].toStringAsFixed(2)}5802BR5913${widget.caregiver.nome}6009SAO PAULO62070503***6304C137';
+        '00020126330014br.gov.bcb.pix0111${widget.caregiver.id}520400005303986540${(_agendamento!['valor_total'] as num).toStringAsFixed(2)}5802BR5913${widget.caregiver.nome}6009SAO PAULO62070503***6304C137';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -340,6 +323,7 @@ class _PaymentScreenState extends State<PaymentScreen>
         color: Colors.white,
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
@@ -348,7 +332,7 @@ class _PaymentScreenState extends State<PaymentScreen>
       ),
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.indigo,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),

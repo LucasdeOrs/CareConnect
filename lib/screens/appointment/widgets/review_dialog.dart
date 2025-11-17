@@ -1,4 +1,5 @@
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/review_service.dart';
 import 'package:flutter/material.dart';
 
 class ReviewDialog extends StatefulWidget {
@@ -20,40 +21,40 @@ class ReviewDialog extends StatefulWidget {
 }
 
 class _ReviewDialogState extends State<ReviewDialog> {
+  final ReviewService _reviewService = ReviewService();
+
   final _formKey = GlobalKey<FormState>();
   final _commentController = TextEditingController();
   int _currentRating = 0;
   bool _isLoading = false;
 
   Future<void> _submitReview() async {
-    if (!_formKey.currentState!.validate() || _currentRating == 0) {
-      if (_currentRating == 0 && mounted) {
+    if (_currentRating == 0) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Por favor, selecione uma nota (1 a 5 estrelas).'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
       return;
     }
 
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      await supabase.from('avaliacoes').insert({
-        'agendamento_id': widget.agendamentoId,
-        'cuidador_id': widget.cuidadorId,
-        'familiar_id': widget.familiarId,
-        'nota': _currentRating,
-        'comentario': _commentController.text.trim(),
-      });
-
-      await supabase
-          .from('agendamentos')
-          .update({'avaliado': true})
-          .eq('id', widget.agendamentoId)
-          .select();
+      await _reviewService.submitReview(
+        agendamentoId: widget.agendamentoId,
+        cuidadorId: widget.cuidadorId,
+        familiarId: widget.familiarId,
+        nota: _currentRating,
+        comentario: _commentController.text.trim(),
+      );
 
       if (mounted) {
         Navigator.pop(context);
@@ -61,7 +62,7 @@ class _ReviewDialogState extends State<ReviewDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Avaliação enviada com sucesso! Obrigado.'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -69,8 +70,8 @@ class _ReviewDialogState extends State<ReviewDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao enviar avaliação: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -102,7 +103,7 @@ class _ReviewDialogState extends State<ReviewDialog> {
             _currentRating >= starNumber ? Icons.star : Icons.star_border,
             size: 36,
           ),
-          color: Colors.amber,
+          color: AppColors.warning,
         );
       }),
     );
@@ -129,7 +130,6 @@ class _ReviewDialogState extends State<ReviewDialog> {
               const SizedBox(height: 12),
               _buildStarRating(),
               const SizedBox(height: 20),
-
               const Padding(
                 padding: EdgeInsets.only(bottom: 8.0, left: 4.0),
                 child: Text(
@@ -158,7 +158,7 @@ class _ReviewDialogState extends State<ReviewDialog> {
         ElevatedButton(
           onPressed: _isLoading ? null : _submitReview,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.indigo,
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
           ),
           child: _isLoading

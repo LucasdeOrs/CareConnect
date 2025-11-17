@@ -1,9 +1,14 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/screens/payment/payment_screen.dart';
 import 'package:careconnect_app/screens/profile/familiar_screens/my_patients_screen.dart';
+import 'package:careconnect_app/services/appointment_service.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/patient_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import '../../main.dart';
+import '../../core/enums/status_enums.dart';
 import '../../models/caregiver_profile.dart';
 
 class AppointmentFormModal extends StatefulWidget {
@@ -16,6 +21,10 @@ class AppointmentFormModal extends StatefulWidget {
 }
 
 class _AppointmentFormModalState extends State<AppointmentFormModal> {
+  final AuthService _authService = AuthService();
+  final PatientService _patientService = PatientService();
+  final AppointmentService _appointmentService = AppointmentService();
+
   final _formKey = GlobalKey<FormState>();
 
   final _addressController = TextEditingController();
@@ -55,20 +64,24 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
   }
 
   Future<void> _fetchMyPatients() async {
+    setState(() => _isLoadingPatients = true);
     try {
-      final userId = supabase.auth.currentUser!.id;
-      final data = await supabase
-          .from('pacientes')
-          .select('id, nome')
-          .eq('familiar_id', userId)
-          .order('nome', ascending: true);
-
+      final userId = _authService.currentUser!.id;
+      final data = await _patientService.getSimplePatients(userId);
       setState(() {
-        _myPatients = List<Map<String, dynamic>>.from(data);
+        _myPatients = data;
         _isLoadingPatients = false;
       });
     } catch (e) {
       debugPrint('Erro ao buscar pacientes: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       setState(() => _isLoadingPatients = false);
     }
   }
@@ -180,18 +193,6 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
     return time.hour + (time.minute / 60.0);
   }
 
-  double _timeStringToDouble(String timeStr) {
-    try {
-      final parts = timeStr.split(':');
-      final hour = int.parse(parts[0]);
-      final minute = int.parse(parts[1]);
-      return hour + (minute / 60.0);
-    } catch (e) {
-      debugPrint("Erro ao converter time string: $e");
-      return 0.0;
-    }
-  }
-
   Future<void> _submitAppointment() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -217,96 +218,54 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
     final novoFim = _timeOfDayToDouble(_endTime!);
 
     try {
-      final bloqueios = await supabase
-          .from('bloqueios_agenda')
-          .select('hora_inicio, hora_fim')
-          .eq('cuidador_id', widget.caregiver.id)
-          .eq('data_bloqueio', dateStr);
+      bool hasConflict = await _appointmentService.checkConflict(
+        caregiverId: widget.caregiver.id,
+        dateStr: dateStr,
+        startTime: novoInicio,
+        endTime: novoFim,
+      );
 
-      for (var bloqueio in bloqueios) {
-        final existingStart = _timeStringToDouble(bloqueio['hora_inicio']);
-        final existingEnd = _timeStringToDouble(bloqueio['hora_fim']);
-        if (novoInicio < existingEnd && novoFim > existingStart) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Este cuidador está bloqueado das ${bloqueio['hora_inicio'].substring(0, 5)} às ${bloqueio['hora_fim'].substring(0, 5)}.',
-                ),
-                backgroundColor: Colors.red,
+      if (hasConflict) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Este cuidador não está disponível neste horário (conflito de agenda ou bloqueio).',
               ),
-            );
-          }
-          setState(() => _isLoading = false);
-          return;
+              backgroundColor: AppColors.error,
+            ),
+          );
         }
+        setState(() => _isLoading = false);
+        return;
       }
 
-      final agendamentos = await supabase
-          .from('agendamentos')
-          .select('hora_inicio, hora_fim')
-          .eq('cuidador_id', widget.caregiver.id)
-          .eq('data_agendamento', dateStr)
-          .inFilter('status', ['pago', 'confirmado']);
-
-      for (var agendamento in agendamentos) {
-        final existingStart = _timeStringToDouble(agendamento['hora_inicio']);
-        final existingEnd = _timeStringToDouble(agendamento['hora_fim']);
-        if (novoInicio < existingEnd && novoFim > existingStart) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'O cuidador já possui um agendamento neste horário.',
-                ),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          setState(() => _isLoading = false);
-          return;
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao verificar agenda: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      final user = supabase.auth.currentUser;
+      final user = _authService.currentUser;
       if (user == null) throw Exception('Usuário não logado');
+
       final startStr =
           '${_startTime!.hour.toString().padLeft(2, '0')}:${_startTime!.minute.toString().padLeft(2, '0')}:00';
       final endStr =
           '${_endTime!.hour.toString().padLeft(2, '0')}:${_endTime!.minute.toString().padLeft(2, '0')}:00';
 
-      final response = await supabase
-          .from('agendamentos')
-          .insert({
-            'cuidador_id': widget.caregiver.id,
-            'familiar_id': user.id,
-            'paciente_id': _selectedPatientId,
-            'tipo_servico': _selectedService,
-            'data_agendamento': dateStr,
-            'hora_inicio': startStr,
-            'hora_fim': endStr,
-            'endereco_local': _addressController.text.trim(),
-            'observacao': _notesController.text.trim(),
-            'valor_total': _totalValue,
-            'status': 'aguardando_pagamento',
-          })
-          .select()
-          .single();
+      final Map<String, dynamic> appointmentData = {
+        'cuidador_id': widget.caregiver.id,
+        'familiar_id': user.id,
+        'paciente_id': _selectedPatientId,
+        'tipo_servico': _selectedService,
+        'data_agendamento': dateStr,
+        'hora_inicio': startStr,
+        'hora_fim': endStr,
+        'endereco_local': _addressController.text.trim(),
+        'observacao': _notesController.text.trim(),
+        'valor_total': _totalValue,
+        'status': AppointmentStatus.aguardandoPagamento.dbValue,
+      };
 
-      final agendamentoId = response['id'];
+      final agendamentoId = await _appointmentService.createAppointment(
+        appointmentData,
+      );
+
       if (mounted) {
         Navigator.pop(context);
         Navigator.push(
@@ -323,8 +282,8 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao agendar: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -355,10 +314,7 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+    final currencyFormat = AppFormatters.currency;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -374,9 +330,13 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'Novo Agendamento',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const Spacer(),
                   IconButton(
@@ -387,7 +347,6 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
               ),
             ),
             const Divider(),
-
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -430,13 +389,13 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
                           const SizedBox(width: 8),
                           Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: IconButton(
                               icon: const Icon(
                                 Icons.person_add_alt_1,
-                                color: Colors.indigo,
+                                color: AppColors.primary,
                               ),
                               tooltip: 'Novo Paciente',
                               onPressed: _goToCreatePatient,
@@ -444,7 +403,6 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
                           ),
                         ],
                       ),
-
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       initialValue: _selectedService,
@@ -473,10 +431,10 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
                         child: Text(
                           _selectedDate == null
                               ? 'Selecione a data'
-                              : DateFormat('dd/MM/yyyy').format(_selectedDate!),
+                              : AppFormatters.date.format(_selectedDate!),
                           style: TextStyle(
                             color: _selectedDate == null
-                                ? Colors.grey
+                                ? Colors.grey.shade600
                                 : Colors.black,
                             fontSize: 16,
                           ),
@@ -559,9 +517,9 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.indigo.shade50,
+                  color: AppColors.primaryLight,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.indigo.shade100),
+                  border: Border.all(color: AppColors.primary.shade100),
                 ),
                 child: Column(
                   children: [
@@ -577,7 +535,7 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.indigo,
+                            color: AppColors.primary,
                           ),
                         ),
                       ],
@@ -588,7 +546,7 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _submitAppointment,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           textStyle: const TextStyle(

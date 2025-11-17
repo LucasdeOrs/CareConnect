@@ -1,16 +1,15 @@
-// lib/screens/appointments/appointments_screen.dart
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
+import 'package:careconnect_app/models/caregiver_profile.dart';
+import 'package:careconnect_app/models/user_model.dart';
+import 'package:careconnect_app/services/appointment_service.dart';
+import 'package:careconnect_app/services/user_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../main.dart';
 import '../../models/appointment_model.dart';
-import 'widgets/appointment_card.dart';
+import '../../core/widgets/cards/appointment_card.dart';
 
 class AppointmentsScreen extends StatefulWidget {
-  // 1. ADICIONADO: Callback para fechar
   final VoidCallback onClose;
-
-  // 2. MODIFICADO: Construtor
   const AppointmentsScreen({super.key, required this.onClose});
 
   @override
@@ -18,15 +17,17 @@ class AppointmentsScreen extends StatefulWidget {
 }
 
 class _AppointmentsScreenState extends State<AppointmentsScreen> {
-  late final Future<Map<String, dynamic>> _userDataFuture;
+  final UserService _userService = UserService();
+  final AppointmentService _appointmentService = AppointmentService();
 
-  String? _userType;
+  late final Future<UserProfileData> _userDataFuture;
+  UserType? _userType;
+  UserModel? _selfUser;
+  CaregiverProfile? _selfCaregiver;
   Map<String, dynamic>? _selfUserMap;
   Map<String, dynamic>? _selfCaregiverMap;
-  String? _cuidadorId;
 
   String _selectedFilter = 'todos';
-
   final Map<String, String> _filterOptions = {
     'todos': 'Todos os Agendamentos',
     'pago': 'Aguardando Aceite',
@@ -42,63 +43,67 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     _userDataFuture = _fetchUserData();
   }
 
-  Future<Map<String, dynamic>> _fetchUserData() async {
-    // ... (código original, sem alteração)
-    final user = supabase.auth.currentUser;
-    if (user == null) throw Exception('Usuário não autenticado');
+  Future<UserProfileData> _fetchUserData() async {
+    try {
+      final (userModel, caregiverProfile, userMap, caregiverMap) =
+          await _userService.getFullUserProfileAndMaps();
 
-    final userProfile = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-    _selfUserMap = userProfile;
-    _userType = userProfile['tipo'] as String?;
-
-    if (_userType == 'cuidador') {
-      final caregiverProfile = await supabase
-          .from('cuidadores')
-          .select('*')
-          .eq('usuario_id', user.id)
-          .single();
-
-      _selfCaregiverMap = caregiverProfile;
-      _cuidadorId = caregiverProfile['id'] as String?;
+      setState(() {
+        _selfUser = userModel;
+        _userType = userModel.userType;
+        _selfCaregiver = caregiverProfile;
+        _selfUserMap = userMap;
+        _selfCaregiverMap = caregiverMap;
+      });
+      return (userModel, caregiverProfile, userMap, caregiverMap);
+    } catch (e) {
+      debugPrint("Erro em _fetchUserData: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      throw Exception('Falha ao carregar dados do usuário.');
     }
-
-    return userProfile;
   }
 
-  Future<void> _updateAppointmentStatus(String id, String newStatus) async {
+  Future<void> _updateAppointmentStatus(String id, String newStatusKey) async {
+    final status = AppointmentStatus.values.firstWhere(
+      (e) => e.dbValue == newStatusKey,
+      orElse: () => AppointmentStatus.cancelado,
+    );
+
     try {
-      await supabase
-          .from('agendamentos')
-          .update({'status': newStatus})
-          .eq('id', id)
-          .select();
+      await _appointmentService.updateStatus(id, status);
 
       String message = 'Agendamento atualizado!';
-      if (newStatus == 'confirmado') message = 'Agendamento aceito!';
-      if (newStatus == 'recusado') message = 'Agendamento recusado.';
-      if (newStatus == 'concluido') message = 'Serviço finalizado com sucesso!';
-      if (newStatus == 'cancelado') {
-        message = 'Agendamento cancelado com sucesso.';
+      if (status == AppointmentStatus.confirmado) {
+        message = 'Agendamento aceito!';
+      }
+      if (status == AppointmentStatus.recusado) {
+        message = 'Agendamento recusado.';
+      }
+      if (status == AppointmentStatus.concluido) {
+        message = 'Serviço finalizado!';
+      }
+      if (status == AppointmentStatus.cancelado) {
+        message = 'Agendamento cancelado.';
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.green),
+          SnackBar(content: Text(message), backgroundColor: AppColors.success),
         );
-
-        setState(() {});
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao atualizar: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -122,7 +127,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         child: DropdownButton<String>(
           value: _selectedFilter,
           isExpanded: true,
-          icon: const Icon(Icons.filter_list_rounded, color: Colors.indigo),
+          icon: const Icon(Icons.filter_list_rounded, color: AppColors.primary),
           items: _filterOptions.entries
               .map(
                 (entry) => DropdownMenuItem(
@@ -152,12 +157,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             tooltip: 'Voltar para a Home',
           ),
           title: const Text('Meus Agendamentos'),
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 1,
           automaticallyImplyLeading: false,
         ),
         Expanded(
-          child: FutureBuilder<Map<String, dynamic>>(
+          child: FutureBuilder<UserProfileData>(
             future: _userDataFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -168,117 +173,31 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 return Center(child: Text('Erro: ${snapshot.error}'));
               }
 
-              if (_userType == null || _selfUserMap == null) {
+              if (!snapshot.hasData ||
+                  _userType == null ||
+                  _selfUserMap == null) {
                 return const Center(
                   child: Text('Erro ao carregar dados do usuário.'),
                 );
               }
 
-              // A Column original do 'body'
+              final userId = _selfUser!.id;
+              final cuidadorId = _selfCaregiver?.id;
+
               return Column(
                 children: [
                   _buildFilterDropdown(),
                   Expanded(
-                    child: StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: () {
-                        // ... (código original do stream, sem alteração)
-                        final userId = supabase.auth.currentUser!.id;
-                        final today = DateFormat(
-                          'yyyy-MM-dd',
-                        ).format(DateTime.now());
-                        dynamic queryStream = supabase
-                            .from('agendamentos')
-                            .stream(primaryKey: ['id']);
-                        if (_userType == 'cuidador') {
-                          if (_cuidadorId == null) {
-                            return Stream<List<Map<String, dynamic>>>.value([]);
-                          }
-                          queryStream = queryStream.eq(
-                            'cuidador_id',
-                            _cuidadorId!,
-                          );
-                        } else {
-                          queryStream = queryStream.eq('familiar_id', userId);
-                        }
-                        if (_selectedFilter == 'pago') {
-                          queryStream = queryStream.eq('status', 'pago');
-                        } else if (_selectedFilter == 'confirmado') {
-                          queryStream = queryStream.eq('status', 'confirmado');
-                        } else if (_selectedFilter == 'concluido') {
-                          queryStream = queryStream.eq('status', 'concluido');
-                        } else if (_selectedFilter == 'recusado') {
-                          queryStream = queryStream.inFilter('status', [
-                            'recusado',
-                            'cancelado',
-                          ]);
-                        } else if (_selectedFilter == 'distantes') {
-                          queryStream = queryStream.lt(
-                            'data_agendamento',
-                            today,
-                          );
-                        }
-                        if (_selectedFilter == 'todos') {
-                          queryStream = queryStream.order(
-                            'data_agendamento',
-                            ascending: false,
-                          );
-                        } else if (_selectedFilter == 'distantes') {
-                          queryStream = queryStream.order(
-                            'data_agendamento',
-                            ascending: true,
-                          );
-                        } else {
-                          queryStream = queryStream.order(
-                            'data_agendamento',
-                            ascending: true,
-                          );
-                        }
-                        final rawStream = (queryStream as Stream<List<dynamic>>)
-                            .map((list) => list.cast<Map<String, dynamic>>());
-                        return rawStream.asyncMap((rawDataList) async {
-                          final enrichedList = <Map<String, dynamic>>[];
-                          for (var rawAgendamento in rawDataList) {
-                            try {
-                              if (rawAgendamento['paciente_id'] != null) {
-                                final pacienteData = await supabase
-                                    .from('pacientes')
-                                    .select()
-                                    .eq('id', rawAgendamento['paciente_id'])
-                                    .single();
-                                rawAgendamento['pacientes'] = pacienteData;
-                              }
-
-                              if (_userType == 'cuidador') {
-                                final familiarId =
-                                    rawAgendamento['familiar_id'];
-                                final familiarData = await supabase
-                                    .from('usuarios')
-                                    .select('*')
-                                    .eq('id', familiarId)
-                                    .single();
-                                rawAgendamento['familiar'] = familiarData;
-                              } else {
-                                final cuidadorId =
-                                    rawAgendamento['cuidador_id'];
-                                final cuidadorData = await supabase
-                                    .from('cuidadores')
-                                    .select('*, usuarios(*)')
-                                    .eq('id', cuidadorId)
-                                    .single();
-                                rawAgendamento['cuidador'] = cuidadorData;
-                              }
-                              enrichedList.add(rawAgendamento);
-                            } catch (e) {
-                              debugPrint(
-                                'Erro ao enriquecer agendamento ${rawAgendamento['id']}: $e',
-                              );
-                            }
-                          }
-                          return enrichedList;
-                        });
-                      }(),
+                    child: StreamBuilder<List<AppointmentDetails>>(
+                      stream: _appointmentService.getAppointmentsStream(
+                        userId: userId,
+                        cuidadorId: cuidadorId,
+                        userType: _userType!,
+                        filterKey: _selectedFilter,
+                        selfUserMap: _selfUserMap!,
+                        selfCaregiverMap: _selfCaregiverMap,
+                      ),
                       builder: (context, streamSnapshot) {
-                        // ... (código original do builder, sem alteração)
                         if (streamSnapshot.hasError) {
                           return Center(
                             child: Text(
@@ -291,8 +210,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                             child: CircularProgressIndicator(),
                           );
                         }
-                        final fullData = streamSnapshot.data!;
-                        if (fullData.isEmpty) {
+
+                        final agendamentos = streamSnapshot.data!;
+
+                        if (agendamentos.isEmpty) {
                           return const Center(
                             child: Padding(
                               padding: EdgeInsets.all(24.0),
@@ -306,25 +227,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                             ),
                           );
                         }
-                        final agendamentos = fullData.map((map) {
-                          return AppointmentDetails.fromMap(
-                            map,
-                            userType: _userType!,
-                            selfUserMap: _selfUserMap!,
-                            selfCaregiverMap: _selfCaregiverMap,
-                          );
-                        }).toList();
+
                         return ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: agendamentos.length,
                           itemBuilder: (context, index) {
                             return AppointmentCard(
                               agendamento: agendamentos[index],
-                              userType: _userType!,
-                              onUpdateStatus: (newStatus) {
+                              userType: _userType!.toDb,
+                              onUpdateStatus: (newStatusKey) {
                                 _updateAppointmentStatus(
                                   agendamentos[index].id,
-                                  newStatus,
+                                  newStatusKey,
                                 );
                               },
                               onReviewSubmitted: _refreshData,

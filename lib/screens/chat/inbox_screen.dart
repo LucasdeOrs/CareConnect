@@ -1,8 +1,9 @@
-import 'package:careconnect_app/screens/chat/chat_screen.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/chat_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../main.dart';
+import '../chat/chat_screen.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -12,40 +13,40 @@ class InboxScreen extends StatefulWidget {
 }
 
 class _InboxScreenState extends State<InboxScreen> {
-  final String _currentUserId = supabase.auth.currentUser!.id;
+  final AuthService _authService = AuthService();
+  final ChatService _chatService = ChatService();
+
+  late final String _currentUserId;
   late Future<List<Map<String, dynamic>>> _conversasFuture;
 
   @override
   void initState() {
     super.initState();
-    _conversasFuture = _fetchConversations();
+    final user = _authService.currentUser;
+    if (user == null) {
+      _currentUserId = 'INVALID';
+      _conversasFuture = Future.value([]);
+    } else {
+      _currentUserId = user.id;
+      _conversasFuture = _fetchConversations();
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchConversations() async {
-    final data = await supabase
-        .from('conversas')
-        .select(
-          '*, familiar:familiar_id(id, nome, avatar_url), cuidador:cuidador_id(id, usuarios(id, nome, avatar_url))',
-        )
-        .order('updated_at', ascending: false);
-
-    final List<Map<String, dynamic>> conversas =
-        List<Map<String, dynamic>>.from(data);
-
-    for (var chat in conversas) {
-      final count = await supabase
-          .from('mensagens')
-          .select(
-            'id',
-          )
-          .eq('conversa_id', chat['id'])
-          .neq('sender_id', _currentUserId)
-          .eq('is_read', false)
-          .count(CountOption.exact);
-      chat['unread_count'] = count.count;
+    if (_currentUserId == 'INVALID') return [];
+    try {
+      return await _chatService.fetchConversations(_currentUserId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      throw Exception('Falha ao carregar conversas.');
     }
-
-    return conversas;
   }
 
   void _refreshInbox() {
@@ -105,14 +106,16 @@ class _InboxScreenState extends State<InboxScreen> {
                 final chat = conversas[index];
                 final familiarData = chat['familiar'];
                 final cuidadorDataWrapper = chat['cuidador'];
-                final cuidadorUserData = cuidadorDataWrapper['usuarios'];
+                final cuidadorUserData = cuidadorDataWrapper != null
+                    ? cuidadorDataWrapper['usuarios']
+                    : null;
 
                 String otherName = 'Usuário';
                 String? otherAvatar;
 
                 if (_currentUserId == familiarData['id']) {
-                  otherName = cuidadorUserData['nome'] ?? 'Cuidador';
-                  otherAvatar = cuidadorUserData['avatar_url'];
+                  otherName = cuidadorUserData?['nome'] ?? 'Cuidador';
+                  otherAvatar = cuidadorUserData?['avatar_url'];
                 } else {
                   otherName = familiarData['nome'] ?? 'Familiar';
                   otherAvatar = familiarData['avatar_url'];
@@ -121,8 +124,7 @@ class _InboxScreenState extends State<InboxScreen> {
                 final lastMessage =
                     chat['last_message'] ?? 'Inicie a conversa...';
                 final date = DateTime.parse(chat['updated_at']).toLocal();
-                final dateString = DateFormat('dd/MM HH:mm').format(date);
-
+                final dateString = AppFormatters.dateTime.format(date);
                 final int unreadCount = chat['unread_count'] ?? 0;
 
                 return ListTile(
@@ -148,9 +150,7 @@ class _InboxScreenState extends State<InboxScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color:
-                          unreadCount >
-                              0 
+                      color: unreadCount > 0
                           ? Colors.black87
                           : Colors.grey.shade600,
                       fontWeight: unreadCount > 0
@@ -166,7 +166,9 @@ class _InboxScreenState extends State<InboxScreen> {
                         dateString,
                         style: TextStyle(
                           fontSize: 12,
-                          color: unreadCount > 0 ? Colors.indigo : Colors.grey,
+                          color: unreadCount > 0
+                              ? AppColors.primary
+                              : Colors.grey,
                         ),
                       ),
                       if (unreadCount > 0) ...[
@@ -174,7 +176,7 @@ class _InboxScreenState extends State<InboxScreen> {
                         Container(
                           padding: const EdgeInsets.all(6),
                           decoration: const BoxDecoration(
-                            color: Colors.indigo,
+                            color: AppColors.error,
                             shape: BoxShape.circle,
                           ),
                           child: Text(

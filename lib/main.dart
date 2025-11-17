@@ -8,7 +8,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:device_preview/device_preview.dart';
-import 'utils/constants.dart';
+import 'core/constants/constants.dart';
 import 'screens/auth/login/login_screen.dart';
 
 Future<void> main() async {
@@ -56,14 +56,10 @@ class MyApp extends StatelessWidget {
           if (snapshot.hasData && snapshot.data?.session != null) {
             final authEvent = snapshot.data!.event;
 
-            // 2. ADICIONE ESTA VERIFICAÇÃO
-            // Se o evento for de recuperação de senha, mande para a tela
-            // de atualização, não importa se o perfil está completo ou não.
             if (authEvent == AuthChangeEvent.passwordRecovery) {
               return const UpdatePasswordScreen();
             }
 
-            // --- Lógica de login normal (seu código original) ---
             final user = snapshot.data!.session!.user;
             final metadata = user.userMetadata;
             final profileCompleted = metadata?['profile_completed'] ?? false;

@@ -2,14 +2,53 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 
 class AuthService {
+  User? get currentUser => supabase.auth.currentUser;
+
   Future<void> signIn(String email, String password) async {
     try {
-      await supabase.auth.signInWithPassword(
-        email: email.trim(),
-        password: password.trim(),
+      await supabase.auth.signInWithPassword(email: email, password: password);
+    } catch (e) {
+      throw Exception('Falha ao realizar login: ${e.toString()}');
+    }
+  }
+
+  Future<void> signUpFamily({
+    required String email,
+    required String password,
+    required String nome,
+    required String phone,
+  }) async {
+    try {
+      await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'nome': nome,
+          'tipo': 'familiar',
+          'phoneNumber': phone,
+          'status': 'PendenteVerificacaoEmail',
+          'profile_completed': false,
+        },
       );
     } catch (e) {
-      throw _handleAuthError(e);
+      throw Exception('Erro no cadastro: ${e.toString()}');
+    }
+  }
+
+  Future<void> signUpCaregiver({
+    required String email,
+    required String password,
+    required String nome,
+    required String phone,
+  }) async {
+    try {
+      await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'nome': nome, 'tipo': 'cuidador', 'phoneNumber': phone},
+      );
+    } catch (e) {
+      throw Exception('Erro no cadastro: ${e.toString()}');
     }
   }
 
@@ -17,64 +56,30 @@ class AuthService {
     await supabase.auth.signOut();
   }
 
-  Future<User?> signUpFamily({
-    required String email,
-    required String password,
-    required String name,
-    required String phone,
-  }) async {
-    try {
-      final res = await supabase.auth.signUp(
-        email: email.trim(),
-        password: password.trim(),
-        data: {
-          'nome': name.trim(),
-          'tipo': 'familiar',
-          'phoneNumber': phone.trim(),
-          'status': 'PendenteVerificacaoEmail',
-          'profile_completed': false,
-        },
-      );
-      return res.user;
-    } catch (e) {
-      throw _handleAuthError(e);
-    }
+  Future<void> resetPassword(String email) async {
+    await supabase.auth.resetPasswordForEmail(email);
   }
 
-  Future<User?> signUpCaregiver({
-    required String email,
-    required String password,
-    required String name,
-    required String phone,
-  }) async {
-    try {
-      final res = await supabase.auth.signUp(
-        email: email.trim(),
-        password: password.trim(),
-        data: {
-          'nome': name.trim(),
-          'tipo': 'cuidador',
-          'phoneNumber': phone.trim(),
-          'status': 'PendenteVerificacaoEmail',
-          'profile_completed': false,
-        },
-      );
-      return res.user;
-    } catch (e) {
-      throw _handleAuthError(e);
-    }
+  Future<void> updatePassword(String newPassword) async {
+    await supabase.auth.updateUser(UserAttributes(password: newPassword));
   }
 
-  String _handleAuthError(dynamic error) {
-    if (error is AuthException) {
-      if (error.message.contains('Invalid login credentials')) {
-        return 'E-mail ou senha incorretos.';
+  Future<void> updateUserData(String userId, Map<String, dynamic> data) async {
+    try {
+      await supabase.from('usuarios').update(data).eq('id', userId);
+
+      if (data.containsKey('profile_completed')) {
+        await supabase.auth.updateUser(
+          UserAttributes(
+            data: {
+              ...?(currentUser?.userMetadata),
+              'profile_completed': data['profile_completed'],
+            },
+          ),
+        );
       }
-      if (error.message.contains('User already registered')) {
-        return 'Este e-mail já está cadastrado.';
-      }
-      return error.message;
+    } catch (e) {
+      throw Exception('Erro ao atualizar dados do usuário: $e');
     }
-    return 'Ocorreu um erro inesperado. Tente novamente.';
   }
 }

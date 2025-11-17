@@ -1,7 +1,7 @@
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/services/chat_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversaId;
@@ -22,43 +22,24 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  final ChatService _chatService = ChatService();
+
   final _messageController = TextEditingController();
   late Stream<List<Map<String, dynamic>>> _messagesStream;
 
   @override
   void initState() {
     super.initState();
-    _messagesStream = _buildStream();
+    _messagesStream = _chatService.getMessagesStream(widget.conversaId);
     _markAsRead();
-  }
-
-  Stream<List<Map<String, dynamic>>> _buildStream() {
-    return supabase
-        .from('mensagens')
-        .stream(primaryKey: ['id'])
-        .eq('conversa_id', widget.conversaId)
-        .order('created_at', ascending: true);
   }
 
   Future<void> _markAsRead() async {
     try {
-      final unread = await supabase
-          .from('mensagens')
-          .select('id')
-          .eq('conversa_id', widget.conversaId)
-          .neq('sender_id', widget.currentUserId)
-          .eq('is_read', false)
-          .limit(1)
-          .maybeSingle();
-
-      if (unread != null) {
-        await supabase
-            .from('mensagens')
-            .update({'is_read': true})
-            .eq('conversa_id', widget.conversaId)
-            .neq('sender_id', widget.currentUserId)
-            .eq('is_read', false);
-      }
+      await _chatService.markConversationAsRead(
+        conversaId: widget.conversaId,
+        currentUserId: widget.currentUserId,
+      );
     } catch (e) {
       debugPrint('Erro ao marcar como lida: $e');
     }
@@ -70,18 +51,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _messageController.clear();
 
-    await ChatService.sendMessage(
-      conversaId: widget.conversaId,
-      content: text,
-      senderId: widget.currentUserId,
-    );
-
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    if (mounted) {
-      setState(() {
-        _messagesStream = _buildStream();
-      });
+    try {
+      await ChatService.sendMessage(
+        conversaId: widget.conversaId,
+        content: text,
+        senderId: widget.currentUserId,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Erro ao enviar mensagem: ${e.toString().replaceAll('Exception: ', '')}',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -124,8 +110,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Erro: ${snapshot.error}'));
                 }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Inicie a conversa!',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  );
                 }
 
                 final messages = snapshot.data!;
@@ -138,24 +129,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   }
                 }
 
-                if (messages.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'Inicie a conversa!',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
                 return ListView.builder(
+                  reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index];
+                    final msg = messages[messages.length - 1 - index];
                     final isMe = msg['sender_id'] == widget.currentUserId;
-                    final time = DateFormat(
-                      'HH:mm',
-                    ).format(DateTime.parse(msg['created_at']).toLocal());
+                    final time = AppFormatters.time.format(
+                      DateTime.parse(msg['created_at']).toLocal(),
+                    );
 
                     return Align(
                       alignment: isMe
@@ -168,7 +151,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: isMe ? Colors.indigo : Colors.grey.shade200,
+                          color: isMe
+                              ? AppColors.primary
+                              : Colors.grey.shade200,
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(12),
                             topRight: const Radius.circular(12),
@@ -256,7 +241,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
                     onPressed: _sendMessage,

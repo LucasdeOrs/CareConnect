@@ -1,17 +1,13 @@
-// [COLE ESTE CÓDIGO INTEIRO EM: step3_profile.dart]
-
-import 'dart:io'; // <-- ADICIONADO
-import 'package:flutter/foundation.dart' show kIsWeb; // <-- ADICIONADO
+import 'dart:io';
+import 'package:careconnect_app/core/constants/app_colors.dart'; // Importa AppColors
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart'; // <-- ADICIONADO
+import 'package:image_picker/image_picker.dart';
 
 class Step3Profile extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final AutovalidateMode autovalidateMode;
   final ValueNotifier<bool> acceptTermsNotifier;
-
-  // CAMPOS PARA A PRÉ-VISUALIZAÇÃO
   final TextEditingController nameController;
   final TextEditingController phoneController;
   final TextEditingController emailController;
@@ -22,7 +18,7 @@ class Step3Profile extends StatelessWidget {
   final ValueNotifier<List<String>> selectedSpecialtiesNotifier;
   final TextEditingController hourlyRateController;
   final TextEditingController availabilityController;
-  final ValueNotifier<XFile?> profileImageNotifier; // <-- ADICIONADO
+  final ValueNotifier<XFile?> profileImageNotifier;
 
   const Step3Profile({
     super.key,
@@ -39,7 +35,7 @@ class Step3Profile extends StatelessWidget {
     required this.selectedSpecialtiesNotifier,
     required this.hourlyRateController,
     required this.availabilityController,
-    required this.profileImageNotifier, // <-- ADICIONADO
+    required this.profileImageNotifier,
   });
 
   void _showTerms(BuildContext context) {
@@ -47,6 +43,7 @@ class Step3Profile extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Termos de Uso - Plataforma de Cuidadores de Idosos'),
+        backgroundColor: Colors.white,
         content: const SingleChildScrollView(
           child: Text(
             'Ao se cadastrar como cuidador nesta plataforma, você declara que leu, compreendeu e concorda com os seguintes termos:\n\n'
@@ -88,7 +85,6 @@ class Step3Profile extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // --- CAMPO: TERMOS (Único campo de entrada aqui) ---
           ValueListenableBuilder<bool>(
             valueListenable: acceptTermsNotifier,
             builder: (context, isAccepted, child) {
@@ -104,6 +100,7 @@ class Step3Profile extends StatelessWidget {
                         children: [
                           Checkbox(
                             value: isAccepted,
+                            activeColor: AppColors.primary,
                             onChanged: (value) {
                               acceptTermsNotifier.value = value ?? false;
                               field.didChange(value);
@@ -117,14 +114,19 @@ class Step3Profile extends StatelessWidget {
                           Expanded(
                             child: InkWell(
                               onTap: () => _showTerms(context),
-                              child: const Text.rich(
+                              child: Text.rich(
                                 TextSpan(
                                   text: 'Aceito os ',
+                                  style: TextStyle(
+                                    color: field.hasError
+                                        ? Theme.of(context).colorScheme.error
+                                        : Colors.black87,
+                                  ),
                                   children: [
                                     TextSpan(
                                       text: 'termos da plataforma',
                                       style: TextStyle(
-                                        color: Colors.indigo,
+                                        color: AppColors.primary,
                                         decoration: TextDecoration.underline,
                                       ),
                                     ),
@@ -153,12 +155,9 @@ class Step3Profile extends StatelessWidget {
             },
           ),
 
-          // --- ESPAÇAMENTO CORRIGIDO ---
-          const SizedBox(height: 16), // <-- MUDADO DE 32
+          const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 16),
-
-          // --- PRÉ-VISUALIZAÇÃO ---
           const Text(
             'Pré-visualização do Perfil',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -174,7 +173,6 @@ class Step3Profile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      // --- CORREÇÃO DA FOTO DE PERFIL ---
                       ValueListenableBuilder<XFile?>(
                         valueListenable: profileImageNotifier,
                         builder: (context, imageFile, _) {
@@ -201,8 +199,6 @@ class Step3Profile extends StatelessWidget {
                           );
                         },
                       ),
-
-                      // --- FIM DA CORREÇÃO ---
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(

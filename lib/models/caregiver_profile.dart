@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class CaregiverProfile {
   String id;
+  // ignore: non_constant_identifier_names
   String usuario_id;
   final String nome;
   final String? avatarUrl;
@@ -23,6 +24,7 @@ class CaregiverProfile {
 
   CaregiverProfile({
     required this.id,
+    // ignore: non_constant_identifier_names
     required this.usuario_id,
     required this.nome,
     this.avatarUrl,
@@ -69,12 +71,8 @@ class CaregiverProfile {
             'url': item['url']?.toString() ?? '',
             'name': item['name']?.toString() ?? 'Certificado',
           });
-        }
-        else if (item is String) {
-          certsParsed.add({
-            'url': item,
-            'name': 'Certificado',
-          });
+        } else if (item is String) {
+          certsParsed.add({'url': item, 'name': 'Certificado'});
         }
       }
     }

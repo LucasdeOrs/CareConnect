@@ -1,8 +1,13 @@
-import 'package:careconnect_app/screens/chat/inbox_screen.dart';
-import 'package:careconnect_app/screens/notifications/notifications_screen.dart';
-import 'package:careconnect_app/screens/settings/settings_screen.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/models/user_model.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/chat_service.dart';
+import 'package:careconnect_app/services/user_service.dart';
 import 'package:flutter/material.dart';
-import '../../../main.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../chat/inbox_screen.dart';
+import '../../notifications/notifications_screen.dart';
+import '../../settings/settings_screen.dart';
 import '../../auth/login/login_screen.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -10,9 +15,12 @@ class AppDrawer extends StatelessWidget {
 
   const AppDrawer({super.key, required this.onNavigate});
 
+  static final AuthService _authService = AuthService();
+  static final UserService _userService = UserService();
+
   Future<void> _signOut(BuildContext context) async {
     try {
-      await supabase.auth.signOut();
+      await _authService.signOut();
       if (context.mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -22,7 +30,10 @@ class AppDrawer extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao sair: ${e.toString()}')),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -46,6 +57,10 @@ class AppDrawer extends StatelessWidget {
               Navigator.of(context).pop();
               _signOut(context);
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Sim, Sair'),
           ),
         ],
@@ -55,27 +70,23 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = supabase.auth.currentUser;
+    final User? user = _authService.currentUser;
     if (user == null) return const Drawer();
 
     return Drawer(
-      child: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: supabase
-            .from('usuarios')
-            .stream(primaryKey: ['id'])
-            .eq('id', user.id),
+      child: StreamBuilder<UserModel?>(
+        stream: _userService.getUserProfileStream(user.id),
         builder: (context, snapshot) {
-          String nome = 'Usuário';
+          String nome = 'Carregando...';
           String? avatarUrl;
 
-          if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            final userData = snapshot.data!.first;
-            nome = userData['nome'] ?? 'Usuário';
-            avatarUrl = userData['avatar_url'];
-          } else {
-            final metadata = user.userMetadata;
-            nome = metadata?['nome'] ?? 'Carregando...';
-            avatarUrl = metadata?['avatar_url'];
+          if (snapshot.hasData && snapshot.data != null) {
+            final userData = snapshot.data!;
+            nome = userData.nome;
+            avatarUrl = userData.avatarUrl;
+          } else if (user.userMetadata != null) {
+            nome = user.userMetadata?['nome'] ?? 'Usuário';
+            avatarUrl = user.userMetadata?['avatar_url'];
           }
 
           return Column(
@@ -83,8 +94,7 @@ class AppDrawer extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.only(top: 60, bottom: 24),
-                // ignore: deprecated_member_use
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                color: AppColors.primaryLight,
                 child: Column(
                   children: [
                     CircleAvatar(
@@ -132,18 +142,11 @@ class AppDrawer extends StatelessWidget {
                       },
                     ),
 
-                    StreamBuilder<List<Map<String, dynamic>>>(
-                      stream: supabase
-                          .from('mensagens')
-                          .stream(primaryKey: ['id'])
-                          .eq('is_read', false),
+                    StreamBuilder<int>(
+                      stream: ChatService.getUnreadCountStream(user.id),
                       builder: (context, msgSnapshot) {
-                        int unreadCount = 0;
-                        if (msgSnapshot.hasData) {
-                          unreadCount = msgSnapshot.data!
-                              .where((msg) => msg['sender_id'] != user.id)
-                              .length;
-                        }
+                        final unreadCount = msgSnapshot.data ?? 0;
+
                         return ListTile(
                           leading: const Icon(Icons.chat_bubble_outline),
                           title: Row(
@@ -154,7 +157,7 @@ class AppDrawer extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: const BoxDecoration(
-                                    color: Colors.red,
+                                    color: AppColors.error,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Text(
@@ -182,7 +185,6 @@ class AppDrawer extends StatelessWidget {
                         );
                       },
                     ),
-
                     ListTile(
                       leading: const Icon(Icons.person_outline),
                       title: const Text('Perfil'),

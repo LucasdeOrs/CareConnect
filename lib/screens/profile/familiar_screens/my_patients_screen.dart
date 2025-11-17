@@ -1,4 +1,7 @@
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/models/patient_model.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/patient_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,22 +13,27 @@ class MyPatientsScreen extends StatefulWidget {
 }
 
 class _MyPatientsScreenState extends State<MyPatientsScreen> {
-  late Future<List<Map<String, dynamic>>> _patientsFuture;
+  final AuthService _authService = AuthService();
+  final PatientService _patientService = PatientService();
+
+  late Future<List<PatientModel>> _patientsFuture;
+  late final String _userId;
 
   @override
   void initState() {
     super.initState();
+    final user = _authService.currentUser;
+    if (user == null) {
+      _userId = 'INVALID';
+    } else {
+      _userId = user.id;
+    }
     _patientsFuture = _fetchPatients();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchPatients() async {
-    final userId = supabase.auth.currentUser!.id;
-    final data = await supabase
-        .from('pacientes')
-        .select()
-        .eq('familiar_id', userId)
-        .order('nome', ascending: true);
-    return List<Map<String, dynamic>>.from(data);
+  Future<List<PatientModel>> _fetchPatients() async {
+    if (_userId == 'INVALID') return [];
+    return await _patientService.getPatients(_userId);
   }
 
   void _refreshList() {
@@ -48,7 +56,7 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text('Excluir', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -57,21 +65,24 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
 
     if (confirm == true) {
       try {
-        await supabase.from('pacientes').delete().eq('id', patientId);
+        await _patientService.deletePatient(patientId);
 
         _refreshList();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Paciente removido com sucesso.')),
+            const SnackBar(
+              content: Text('Paciente removido com sucesso.'),
+              backgroundColor: AppColors.success,
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Erro ao excluir: $e'),
-              backgroundColor: Colors.red,
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.error,
             ),
           );
         }
@@ -79,7 +90,7 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
     }
   }
 
-  void _showPatientForm({Map<String, dynamic>? patient}) async {
+  void _showPatientForm({PatientModel? patient}) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => _PatientFormDialog(patient: patient),
@@ -101,11 +112,11 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
       backgroundColor: Colors.grey[50],
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showPatientForm(),
-        backgroundColor: Colors.indigo,
+        backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
+      body: FutureBuilder<List<PatientModel>>(
         future: _patientsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -154,21 +165,21 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
                     vertical: 8,
                   ),
                   leading: CircleAvatar(
-                    backgroundColor: Colors.indigo.shade50,
+                    backgroundColor: AppColors.primaryLight,
                     child: Text(
-                      patient['nome'][0].toUpperCase(),
+                      patient.nome[0].toUpperCase(),
                       style: TextStyle(
-                        color: Colors.indigo.shade800,
+                        color: AppColors.primary.shade800,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                   title: Text(
-                    patient['nome'],
+                    patient.nome,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    '${patient['idade'] ?? '?'} anos • ${patient['condicoes'] ?? 'Nenhuma condição informada'}',
+                    '${patient.idade ?? '?'} anos • ${patient.condicoes ?? 'Nenhuma condição informada'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -177,7 +188,7 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
                       if (value == 'edit') {
                         _showPatientForm(patient: patient);
                       } else if (value == 'delete') {
-                        _deletePatient(patient['id']);
+                        _deletePatient(patient.id);
                       }
                     },
                     itemBuilder: (context) => [
@@ -195,9 +206,16 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete, size: 20),
+                            Icon(
+                              Icons.delete,
+                              size: 20,
+                              color: AppColors.error,
+                            ),
                             SizedBox(width: 8),
-                            Text('Excluir'),
+                            Text(
+                              'Excluir',
+                              style: TextStyle(color: AppColors.error),
+                            ),
                           ],
                         ),
                       ),
@@ -214,7 +232,7 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
 }
 
 class _PatientFormDialog extends StatefulWidget {
-  final Map<String, dynamic>? patient;
+  final PatientModel? patient;
 
   const _PatientFormDialog({this.patient});
 
@@ -223,6 +241,9 @@ class _PatientFormDialog extends StatefulWidget {
 }
 
 class _PatientFormDialogState extends State<_PatientFormDialog> {
+  final AuthService _authService = AuthService();
+  final PatientService _patientService = PatientService();
+
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
@@ -234,10 +255,10 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
   void initState() {
     super.initState();
     if (widget.patient != null) {
-      _nameController.text = widget.patient!['nome'];
-      _ageController.text = widget.patient!['idade']?.toString() ?? '';
-      _conditionsController.text = widget.patient!['condicoes'] ?? '';
-      _notesController.text = widget.patient!['observacoes'] ?? '';
+      _nameController.text = widget.patient!.nome;
+      _ageController.text = widget.patient!.idade?.toString() ?? '';
+      _conditionsController.text = widget.patient!.condicoes ?? '';
+      _notesController.text = widget.patient!.observacoes ?? '';
     }
   }
 
@@ -255,7 +276,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
 
     setState(() => _isLoading = true);
 
-    final userId = supabase.auth.currentUser!.id;
+    final userId = _authService.currentUser!.id;
     final data = {
       'familiar_id': userId,
       'nome': _nameController.text.trim(),
@@ -266,12 +287,9 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
 
     try {
       if (widget.patient == null) {
-        await supabase.from('pacientes').insert(data);
+        await _patientService.createPatient(data);
       } else {
-        await supabase
-            .from('pacientes')
-            .update(data)
-            .eq('id', widget.patient!['id']);
+        await _patientService.updatePatient(widget.patient!.id, data);
       }
 
       if (mounted) {
@@ -284,7 +302,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                   ? 'Paciente adicionado!'
                   : 'Paciente atualizado!',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -292,8 +310,8 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -304,10 +322,10 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEditing = widget.patient != null;
+
     return AlertDialog(
-      title: Text(
-        widget.patient == null ? 'Adicionar Paciente' : 'Editar Paciente',
-      ),
+      title: Text(isEditing ? 'Editar Paciente' : 'Adicionar Paciente'),
       backgroundColor: Colors.white,
       content: SingleChildScrollView(
         child: Form(
@@ -320,6 +338,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Nome Completo*',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
                 ),
                 textCapitalization: TextCapitalization.words,
                 validator: (value) => value == null || value.trim().isEmpty
@@ -332,6 +351,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                 decoration: const InputDecoration(
                   labelText: 'Idade',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.cake_outlined),
                 ),
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -343,6 +363,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                   labelText: 'Condições / Diagnósticos',
                   hintText: 'Ex: Alzheimer, Diabetes, Hipertensão',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.sick_outlined),
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 2,
@@ -354,6 +375,7 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                   labelText: 'Observações / Rotina',
                   hintText: 'Ex: Toma remédio às 8h, gosta de caminhar...',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.schedule),
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 3,
@@ -364,12 +386,12 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context), // Retorna null (cancelado)
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancelar'),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _savePatient,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
           child: _isLoading
               ? const SizedBox(
                   width: 20,
@@ -379,7 +401,10 @@ class _PatientFormDialogState extends State<_PatientFormDialog> {
                     strokeWidth: 2,
                   ),
                 )
-              : const Text('Salvar', style: TextStyle(color: Colors.white)),
+              : Text(
+                  isEditing ? 'Salvar' : 'Adicionar',
+                  style: const TextStyle(color: Colors.white),
+                ),
         ),
       ],
     );

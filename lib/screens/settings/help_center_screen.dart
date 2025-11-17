@@ -1,3 +1,4 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class HelpCenterScreen extends StatelessWidget {
@@ -62,6 +63,8 @@ class _FAQItem extends StatelessWidget {
         side: BorderSide(color: Colors.grey.shade200),
       ),
       child: ExpansionTile(
+        collapsedIconColor: AppColors.primary,
+        iconColor: AppColors.primary,
         title: Text(
           question,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),

@@ -1,7 +1,7 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart'; // Para acessar 'supabase'
-import '../../../widgets/logo_widget.dart'; // Opcional: para o logo
+import '../../../core/widgets/logo_widget.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -11,6 +11,8 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final AuthService _authService = AuthService();
+
   final _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
@@ -21,15 +23,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
 
     setState(() => _isLoading = true);
-
     final email = _emailController.text.trim();
 
     try {
-      await supabase.auth.resetPasswordForEmail(
-        email,
-        // TODO: Verifique se o seu deep link está configurado no Supabase
-        // ex: 'io.supabase.careconnect://login-callback/'
-      );
+      await _authService.resetPassword(email);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -37,23 +34,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             content: Text(
               'Link enviado! Verifique sua caixa de entrada e spam.',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
-        Navigator.pop(context); // Volta para a tela de login
-      }
-    } on AuthException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message), backgroundColor: Colors.red),
-        );
+        Navigator.pop(context);
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ocorreu um erro. Tente novamente.'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text(error.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -76,7 +67,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       appBar: AppBar(
         title: const Text('Recuperar Senha'),
         backgroundColor: Colors.white,
-        elevation: 1,
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -87,12 +77,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              const LogoWidget(size: 150), // Opcional
+              const LogoWidget(size: 150),
               const SizedBox(height: 40),
-              const Text(
+              Text(
                 'Esqueceu sua senha?',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -136,7 +130,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     : const Text('Enviar Link de Recuperação'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(
                     fontSize: 16,

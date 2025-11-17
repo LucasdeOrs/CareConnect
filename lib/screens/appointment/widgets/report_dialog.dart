@@ -1,5 +1,6 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/report_service.dart';
 import 'package:flutter/material.dart';
-import '../../../main.dart';
 
 class ReportDialog extends StatefulWidget {
   final String agendamentoId;
@@ -23,6 +24,8 @@ class _ReportDialogState extends State<ReportDialog> {
   final _detalhesController = TextEditingController();
   bool _isLoading = false;
 
+  final ReportService _reportService = ReportService();
+
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -31,21 +34,21 @@ class _ReportDialogState extends State<ReportDialog> {
     setState(() => _isLoading = true);
 
     try {
-      await supabase.from('reports').insert({
-        'agendamento_id': widget.agendamentoId,
-        'reporter_id': widget.familiarId,
-        'reported_cuidador_id': widget.cuidadorId,
-        'motivo': _motivoController.text.trim(),
-        'detalhes': _detalhesController.text.trim(),
-        'anexos_urls': null,
-      });
+      await _reportService.submitReport(
+        agendamentoId: widget.agendamentoId,
+        reporterId: widget.familiarId,
+        reportedCuidadorId: widget.cuidadorId,
+        motivo: _motivoController.text.trim(),
+        detalhes: _detalhesController.text.trim(),
+        anexosUrls: null,
+      );
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Denúncia enviada com sucesso.'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -53,8 +56,8 @@ class _ReportDialogState extends State<ReportDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao enviar denúncia: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -137,7 +140,7 @@ class _ReportDialogState extends State<ReportDialog> {
         ElevatedButton(
           onPressed: _isLoading ? null : _submitReport,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: AppColors.error,
             foregroundColor: Colors.white,
           ),
           child: _isLoading

@@ -1,10 +1,10 @@
-// lib/screens/profile/meus_recebimentos_screen.dart
-
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/screens/profile/widgets/edit_pix_screen.dart';
+import 'package:careconnect_app/services/financial_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class MeusRecebimentosScreen extends StatefulWidget {
   final CaregiverProfile caregiverProfile;
@@ -15,9 +15,12 @@ class MeusRecebimentosScreen extends StatefulWidget {
 }
 
 class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
+  final FinancialService _financialService = FinancialService();
+
   late Future<Map<String, dynamic>> _financialDataFuture;
-  final _currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-  final _dateFormat = DateFormat('dd/MM/yyyy');
+
+  final _currencyFormat = AppFormatters.currency;
+  final _dateFormat = AppFormatters.date;
 
   @override
   void initState() {
@@ -26,45 +29,21 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
   }
 
   Future<Map<String, dynamic>> _fetchFinancialData() async {
-    // ... (busca no Supabase não muda) ...
-    final pixData = await supabase
-        .from('cuidadores')
-        .select('pix_key_type, pix_key')
-        .eq('id', widget.caregiverProfile.id)
-        .single();
-    final payments = await supabase
-        .from('pagamentos')
-        .select(
-          'valor_liquido_recebedor, status_pagamento, created_at, agendamento:agendamento_id(familiar:familiar_id(nome))',
-        )
-        .eq('recebedor_id', widget.caregiverProfile.id)
-        .order('created_at', ascending: false);
-
-    // 3. Calcula os saldos (COM A CORREÇÃO)
-    double saldoDisponivel = 0.0;
-    double saldoPendente = 0.0;
-
-    for (var p in payments) {
-      final status = p['status_pagamento'];
-      final valor = (p['valor_liquido_recebedor'] as num).toDouble();
-
-      // ### CORREÇÃO AQUI ###
-      // Trocamos 'disponivel' por 'sucedido'
-      if (status == 'sucedido') {
-        saldoDisponivel += valor;
-      } else if (status == 'processando') {
-        saldoPendente += valor;
+    try {
+      return await _financialService.fetchCaregiverFinancialData(
+        widget.caregiverProfile.id,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
-      // 'pago' ou 'cancelado' não entram em nenhum saldo
+      throw Exception('Falha ao carregar dados financeiros.');
     }
-
-    return {
-      'pix_key_type': pixData['pix_key_type'],
-      'pix_key': pixData['pix_key'],
-      'payments': payments,
-      'saldo_disponivel': saldoDisponivel,
-      'saldo_pendente': saldoPendente,
-    };
   }
 
   void _navigateToEditPix(String? currentType, String? currentKey) {
@@ -78,7 +57,6 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
         ),
       ),
     ).then((_) {
-      // Recarrega os dados quando a tela de edição for fechada
       setState(() {
         _financialDataFuture = _fetchFinancialData();
       });
@@ -149,13 +127,13 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
             _buildBalanceRow(
               'Saldo Disponível para Saque',
               disponivel,
-              Colors.green.shade700,
+              AppColors.success.shade700,
             ),
             const Divider(height: 24),
             _buildBalanceRow(
               'Saldo Pendente',
               pendente,
-              Colors.orange.shade700,
+              AppColors.warning.shade700,
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -165,12 +143,11 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
                 label: const Text('Solicitar Saque'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                 ),
                 onPressed: disponivel > 0
                     ? () {
-                        // TODO: Implementar lógica de solicitação de saque
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Função em desenvolvimento!'),
@@ -224,7 +201,7 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
               children: [
                 Icon(
                   pixConfigurado ? Icons.pix : Icons.warning_amber_rounded,
-                  color: pixConfigurado ? Colors.green : Colors.orange,
+                  color: pixConfigurado ? AppColors.success : AppColors.warning,
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -249,6 +226,8 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
               onPressed: () => _navigateToEditPix(pixType, pixKey),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 40),
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
               ),
               child: Text(
                 pixConfigurado ? 'Alterar Dados PIX' : 'Cadastrar PIX',
@@ -278,10 +257,16 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
       itemCount: payments.length,
       itemBuilder: (context, index) {
         final payment = payments[index];
+
         final agendamento = payment['agendamento'] ?? {};
         final familiar = agendamento['familiar'] ?? {};
         final nomeFamiliar = familiar['nome'] ?? 'Familiar';
-        final status = payment['status_pagamento'] ?? 'desconhecido';
+
+        final statusString = payment['status_pagamento'] ?? 'desconhecido';
+        final status = PaymentStatus.fromString(statusString);
+
+        final valor = (payment['valor_liquido_recebedor'] ?? 0).toDouble();
+        final data = DateTime.parse(payment['created_at']);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -291,78 +276,33 @@ class _MeusRecebimentosScreenState extends State<MeusRecebimentosScreen> {
             side: BorderSide(color: Colors.grey.shade200),
           ),
           child: ListTile(
-            leading: _getStatusIcon(status),
+            leading: Icon(status.icon, color: status.color),
             title: Text(
-              _currencyFormat.format(payment['valor_liquido_recebedor'] ?? 0),
+              _currencyFormat.format(valor),
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: Text(
-              'De: $nomeFamiliar\nData: ${_dateFormat.format(DateTime.parse(payment['created_at']))}',
+              'De: $nomeFamiliar\nData: ${_dateFormat.format(data)}',
             ),
-            trailing: Text(
-              _getStatusText(status),
-              style: TextStyle(
-                color: _getStatusColor(status),
-                fontWeight: FontWeight.w500,
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                // ignore: deprecated_member_use
+                color: status.color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                status.label,
+                style: TextStyle(
+                  color: status.color,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                ),
               ),
             ),
           ),
         );
       },
     );
-  }
-
-  // lib/screens/profile/meus_recebimentos_screen.dart
-
-  Icon _getStatusIcon(String status) {
-    switch (status) {
-      // ### CORREÇÃO AQUI ###
-      case 'sucedido':
-        return const Icon(Icons.check_circle, color: Colors.green);
-      case 'pago':
-        return const Icon(Icons.download_done, color: Colors.blue);
-      case 'processando':
-        return const Icon(Icons.hourglass_top, color: Colors.orange);
-      case 'cancelado':
-      case 'reembolsado':
-        return const Icon(Icons.cancel, color: Colors.red);
-      default:
-        return const Icon(Icons.help_outline, color: Colors.grey);
-    }
-  }
-
-  String _getStatusText(String status) {
-    switch (status) {
-      // ### CORREÇÃO AQUI ###
-      case 'sucedido':
-        return 'Disponível'; // Ou "Sucedido", como preferir
-      case 'pago':
-        return 'Pago';
-      case 'processando':
-        return 'Pendente';
-      case 'cancelado':
-        return 'Cancelado';
-      case 'reembolsado':
-        return 'Reembolsado';
-      default:
-        return 'Outro';
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      // ### CORREÇÃO AQUI ###
-      case 'sucedido':
-        return Colors.green.shade700;
-      case 'pago':
-        return Colors.blue.shade700;
-      case 'processando':
-        return Colors.orange.shade700;
-      case 'cancelado':
-      case 'reembolsado':
-        return Colors.red.shade700;
-      default:
-        return Colors.grey.shade700;
-    }
   }
 }

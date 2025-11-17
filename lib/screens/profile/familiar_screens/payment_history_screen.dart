@@ -1,6 +1,9 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/payment_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../../../main.dart';
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -10,9 +13,13 @@ class PaymentHistoryScreen extends StatefulWidget {
 }
 
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
+  final AuthService _authService = AuthService();
+  final PaymentService _paymentService = PaymentService();
+
   late final Future<List<Map<String, dynamic>>> _paymentsFuture;
-  final _currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
-  final _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+  final _currencyFormat = AppFormatters.currency;
+  final _dateFormat = AppFormatters.dateTime;
 
   @override
   void initState() {
@@ -22,18 +29,18 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchPayments() async {
     try {
-      final userId = supabase.auth.currentUser!.id;
-      final data = await supabase
-          .from('pagamentos')
-          .select(
-            'id, valor_bruto, status_pagamento, created_at, metodo_pagamento, agendamento:agendamento_id( cuidador:cuidador_id( usuario:usuario_id(nome) ) )',
-          )
-          .eq('pagador_id', userId)
-          .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(data);
+      final userId = _authService.currentUser!.id;
+      return await _paymentService.getHistory(userId);
     } catch (e) {
       debugPrint('Erro ao buscar pagamentos: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
       return [];
     }
   }
@@ -97,7 +104,10 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                 // Fallback silencioso
               }
 
-              final status = payment['status_pagamento'] ?? 'desconhecido';
+              final statusString =
+                  payment['status_pagamento'] ?? 'desconhecido';
+              final status = PaymentStatus.fromString(statusString);
+
               final valor = (payment['valor_bruto'] as num).toDouble();
               final data = DateTime.parse(payment['created_at']);
 
@@ -115,11 +125,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   ),
                   leading: CircleAvatar(
                     // ignore: deprecated_member_use
-                    backgroundColor: _getStatusColor(status).withOpacity(0.1),
-                    child: Icon(
-                      _getStatusIcon(status),
-                      color: _getStatusColor(status),
-                    ),
+                    backgroundColor: status.color.withOpacity(0.1),
+                    child: Icon(status.icon, color: status.color),
                   ),
                   title: Text(
                     _currencyFormat.format(valor),
@@ -149,13 +156,13 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                     ),
                     decoration: BoxDecoration(
                       // ignore: deprecated_member_use
-                      color: _getStatusColor(status).withOpacity(0.1),
+                      color: status.color.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      _getStatusText(status),
+                      status.label,
                       style: TextStyle(
-                        color: _getStatusColor(status),
+                        color: status.color,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
@@ -168,56 +175,5 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         },
       ),
     );
-  }
-
-  String _getStatusText(String status) {
-    switch (status) {
-      case 'sucedido':
-      case 'pago':
-        return 'Pago';
-      case 'processando':
-        return 'Processando';
-      case 'falha':
-        return 'Falhou';
-      case 'reembolsado':
-      case 'cancelado':
-        return 'Reembolsado';
-      default:
-        return status.toUpperCase();
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'sucedido':
-      case 'pago':
-        return Icons.check;
-      case 'processando':
-        return Icons.access_time;
-      case 'falha':
-        return Icons.error_outline;
-      case 'reembolsado':
-      case 'cancelado':
-        return Icons.undo;
-      default:
-        return Icons.help_outline;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'sucedido':
-      case 'pago':
-        return Colors.green;
-      case 'processando':
-        return Colors.orange;
-      case 'falha':
-        return Colors.red;
-      case 'reembolsado':
-      case 'cancelado':
-        return Colors.purple;
-      default:
-        return Colors.grey;
-    }
   }
 }

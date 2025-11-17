@@ -1,17 +1,16 @@
-// [COLE ESTE CÓDIGO INTEIRO EM: complete_caregiver_profile_screen.dart]
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/models/named_certificate_model.dart';
 import 'package:careconnect_app/screens/auth/register_caregiver/widgets/step1_personal.dart';
 import 'package:careconnect_app/screens/auth/register_caregiver/widgets/step3_profile.dart';
 import 'package:careconnect_app/screens/auth/register_caregiver/widgets/step_indicator.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/caregiver_service.dart';
+import 'package:careconnect_app/services/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import '../../../main.dart';
-import '../register_caregiver/widgets/step2_professional.dart'
-    show NamedCertificate, Step2Professional;
+import '../register_caregiver/widgets/step2_professional.dart';
 import '../login/login_screen.dart';
 
 class CompleteCaregiverProfileScreen extends StatefulWidget {
@@ -24,29 +23,30 @@ class CompleteCaregiverProfileScreen extends StatefulWidget {
 
 class _CompleteCaregiverProfileScreenState
     extends State<CompleteCaregiverProfileScreen> {
+  final AuthService _authService = AuthService();
+  final StorageService _storageService = StorageService();
+  final CaregiverService _caregiverService = CaregiverService();
+
   final _pageController = PageController();
   int _currentStep = 0;
   bool _isLoading = false;
-  final User? _user = supabase.auth.currentUser;
+
+  late final User? _user = _authService.currentUser;
 
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
-  // Keys dos formulários
   final _formKeyStep1 = GlobalKey<FormState>();
   final _formKeyStep2 = GlobalKey<FormState>();
   final _formKeyStep3 = GlobalKey<FormState>();
 
-  // --- Controllers Step 1 (Dados Pessoais) ---
   final _cpfController = TextEditingController();
   final _birthDateController = TextEditingController();
   final _fullAddressController = TextEditingController();
   final _cidadeUFController = TextEditingController();
-  final _cityController = TextEditingController(); // Interno
-  final _stateController = TextEditingController(); // Interno
+  final _cityController = TextEditingController();
+  final _stateController = TextEditingController();
   final _selectedGeneroNotifier = ValueNotifier<String?>(null);
   final _profileImageNotifier = ValueNotifier<XFile?>(null);
-
-  // --- Controllers Step 2 (Dados Profissionais) ---
   final _profissaoController = TextEditingController();
   final _formacaoSaudeNotifier = ValueNotifier<bool>(false);
   final _experienceController = TextEditingController();
@@ -54,20 +54,15 @@ class _CompleteCaregiverProfileScreenState
   final _selectedSpecialtiesNotifier = ValueNotifier<List<String>>([]);
   final _certificateNotifier = ValueNotifier<List<NamedCertificate>>([]);
   final _hourlyRateController = TextEditingController();
-
-  // --- Controllers de Disponibilidade (para Step 2) ---
   final _availabilityDaysNotifier = ValueNotifier<String?>(null);
   final _availabilityTimeNotifier = ValueNotifier<String?>(null);
   final _availabilityController = TextEditingController();
-
-  // --- Controllers Step 3 (Perfil) ---
   final _acceptTermsNotifier = ValueNotifier<bool>(false);
 
   @override
   void dispose() {
     _pageController.dispose();
 
-    // Step 1
     _cpfController.dispose();
     _birthDateController.dispose();
     _fullAddressController.dispose();
@@ -77,18 +72,19 @@ class _CompleteCaregiverProfileScreenState
     _selectedGeneroNotifier.dispose();
     _profileImageNotifier.dispose();
 
-    // Step 2
     _profissaoController.dispose();
     _formacaoSaudeNotifier.dispose();
     _experienceController.dispose();
     _yearsExperienceController.dispose();
     _selectedSpecialtiesNotifier.dispose();
+    for (var cert in _certificateNotifier.value) {
+      cert.dispose();
+    }
     _certificateNotifier.dispose();
     _hourlyRateController.dispose();
     _availabilityDaysNotifier.dispose();
     _availabilityTimeNotifier.dispose();
 
-    // Step 3
     _availabilityController.dispose();
     _acceptTermsNotifier.dispose();
 
@@ -109,7 +105,7 @@ class _CompleteCaregiverProfileScreenState
         final time = _availabilityTimeNotifier.value;
 
         if (days != null && time != null) {
-          _availabilityController.text = '$days - $time';
+          _availabilityController.text = '$days, $time';
         } else {
           _availabilityController.text = 'Disponibilidade não definida';
         }
@@ -145,6 +141,7 @@ class _CompleteCaregiverProfileScreenState
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Sair do Cadastro?'),
+          backgroundColor: Colors.white,
           content: const Text(
             'Seu progresso não será salvo. Deseja deslogar e voltar para o login?',
           ),
@@ -156,7 +153,7 @@ class _CompleteCaregiverProfileScreenState
             ElevatedButton(
               onPressed: () => Navigator.of(context).pop(true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: AppColors.error,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Sair'),
@@ -166,82 +163,26 @@ class _CompleteCaregiverProfileScreenState
       );
 
       if (didRequestSignOut == true) {
-        await supabase.auth.signOut();
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
+        try {
+          await _authService.signOut();
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(e.toString()),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
         }
       }
     }
-  }
-
-  Future<String?> _uploadAvatar(String userId) async {
-    final avatarFile = _profileImageNotifier.value;
-    if (avatarFile == null) return null;
-    final fileExt = avatarFile.name.split('.').last.toLowerCase();
-    final filePath = '$userId/profile.$fileExt';
-    final fileBytes = await avatarFile.readAsBytes();
-    await supabase.storage
-        .from('avatars')
-        .uploadBinary(
-          filePath,
-          fileBytes,
-          fileOptions: FileOptions(
-            cacheControl: '3600',
-            upsert: true,
-            contentType: avatarFile.mimeType,
-          ),
-        );
-    return supabase.storage.from('avatars').getPublicUrl(filePath);
-  }
-
-  Future<List<Map<String, String>>?> _uploadCertificates(String userId) async {
-    final certificates = _certificateNotifier.value;
-    if (certificates.isEmpty) return null;
-    final List<Map<String, String>> certificateUrls = [];
-    final bucketName = 'certificates';
-    for (final NamedCertificate cert in certificates) {
-      final safeFileName = cert.controller.text.trim().replaceAll(
-        RegExp(r'[^a-zA-Z0-9.-]'),
-        '_',
-      );
-      final certPath = '$userId/certificates/${safeFileName}_${cert.file.name}';
-      if (kIsWeb) {
-        if (cert.file.bytes == null) continue;
-        await supabase.storage
-            .from(bucketName)
-            .uploadBinary(
-              certPath,
-              cert.file.bytes!,
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: true,
-              ),
-            );
-      } else {
-        if (cert.file.path == null) continue;
-        await supabase.storage
-            .from(bucketName)
-            .upload(
-              certPath,
-              File(cert.file.path!),
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: true,
-              ),
-            );
-      }
-      final publicUrl = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(certPath);
-      certificateUrls.add({
-        'name': cert.controller.text.trim(),
-        'url': publicUrl,
-      });
-    }
-    return certificateUrls;
   }
 
   Future<void> _saveProfile() async {
@@ -259,9 +200,15 @@ class _CompleteCaregiverProfileScreenState
     setState(() => _isLoading = true);
 
     try {
-      final String? avatarUrl = await _uploadAvatar(_user.id);
-      final List<Map<String, String>>? certificateUrls =
-          await _uploadCertificates(_user.id);
+      final String? avatarUrl = _profileImageNotifier.value != null
+          ? await _storageService.uploadAvatar(
+              _user.id,
+              _profileImageNotifier.value!,
+            )
+          : null;
+
+      final List<Map<String, String>>? certificateUrls = await _storageService
+          .uploadCertificates(_user.id, _certificateNotifier.value);
 
       final String? birthDate = _birthDateController.text.trim().isNotEmpty
           ? DateFormat(
@@ -269,79 +216,58 @@ class _CompleteCaregiverProfileScreenState
               'pt_BR',
             ).parseStrict(_birthDateController.text.trim()).toIso8601String()
           : null;
-      final String? genero = _selectedGeneroNotifier.value;
-      final String fullAddress = _fullAddressController.text.trim();
       final parts = _cidadeUFController.text.split(', ');
       final String? city = parts.length == 2 ? parts[0].trim() : null;
       final String? state = parts.length == 2 ? parts[1].trim() : null;
-      final String cpf = _cpfController.text.trim();
 
-      final String experiencia = _experienceController.text.trim();
-      final int experienceYears =
-          int.tryParse(_yearsExperienceController.text.trim()) ?? 0;
-      final String especialidades = _selectedSpecialtiesNotifier.value.join(
-        ', ',
-      );
-      final String profissao = _profissaoController.text.trim();
-      final bool formacaoSaude = _formacaoSaudeNotifier.value;
+      final Map<String, dynamic> userData = {
+        'birthDate': birthDate,
+        'full_address': _fullAddressController.text.trim(),
+        'city': city,
+        'state': state,
+        'genero': _selectedGeneroNotifier.value,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+        'profile_completed': true,
+        'status': 'Ativo',
+      };
+
       final double hourlyRate =
           double.tryParse(
             _hourlyRateController.text.trim().replaceAll(',', '.'),
           ) ??
           0.0;
-      final String availability = _availabilityController.text;
 
-      await supabase
-          .from('usuarios')
-          .update({
-            'birthDate': birthDate,
-            'full_address': fullAddress,
-            'city': city,
-            'state': state,
-            'genero': genero,
-            'avatar_url': avatarUrl,
-            'profile_completed': true,
-            'status': 'Ativo',
-          })
-          .eq('id', _user.id);
+      final Map<String, dynamic> caregiverData = {
+        'cpf': _cpfController.text.trim(),
+        'experiencia': _experienceController.text.trim(),
+        'especialidades': _selectedSpecialtiesNotifier.value.join(','),
+        'experience_years':
+            int.tryParse(_yearsExperienceController.text.trim()) ?? 0,
+        'hourly_rate': hourlyRate,
+        'availability': _availabilityController.text,
+        'profissao': _profissaoController.text.trim(),
+        'formacao_saude': _formacaoSaudeNotifier.value,
+        if (certificateUrls != null) 'certificado_url': certificateUrls,
+        'approval_status': 'Pendente',
+      };
 
-      await supabase
-          .from('cuidadores')
-          .update({
-            'cpf': cpf,
-            'experiencia': experiencia,
-            'especialidades': especialidades,
-            'experience_years': experienceYears,
-            'hourly_rate': hourlyRate,
-            'availability': availability,
-            'profissao': profissao,
-            'formacao_saude': formacaoSaude,
-            'certificado_url': certificateUrls,
-            'approval_status': 'Pendente',
-          })
-          .eq('usuario_id', _user.id);
+      await _caregiverService.updateProfile(_user.id, caregiverData);
 
-      await supabase.auth.updateUser(
-        UserAttributes(
-          data: {...?_user.userMetadata, 'profile_completed': true},
-        ),
-      );
+      await _authService.updateUserData(_user.id, userData);
 
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/');
       }
     } catch (error) {
       debugPrint("Erro geral ao completar perfil do cuidador: $error");
-      String errorMessage = 'Erro inesperado ao salvar perfil.';
-      if (error is PostgrestException) {
-        errorMessage = 'Erro no banco: ${error.message} (Code: ${error.code})';
-      } else {
-        errorMessage = 'Erro: ${error.toString()}';
-      }
+      String errorMessage = error.toString().replaceAll('Exception: ', '');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -422,8 +348,6 @@ class _CompleteCaregiverProfileScreenState
                             formKey: _formKeyStep3,
                             autovalidateMode: _autovalidateMode,
                             acceptTermsNotifier: _acceptTermsNotifier,
-
-                            // Para a Pré-visualização
                             nameController: TextEditingController(
                               text: _user?.userMetadata?['nome'] ?? '',
                             ),
@@ -442,8 +366,6 @@ class _CompleteCaregiverProfileScreenState
                                 _selectedSpecialtiesNotifier,
                             hourlyRateController: _hourlyRateController,
                             availabilityController: _availabilityController,
-
-                            // *** A MUDANÇA ESTÁ AQUI ***
                             profileImageNotifier: _profileImageNotifier,
                           ),
                         ],
@@ -467,7 +389,7 @@ class _CompleteCaregiverProfileScreenState
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.indigo,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
                       child: Text(

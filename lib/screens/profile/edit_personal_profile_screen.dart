@@ -1,11 +1,12 @@
-// lib/screens/profile/edit_personal_profile_screen.dart
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/widgets/image_upload_widget.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/storage_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../main.dart'; // Para 'supabase'
+import 'package:image_picker/image_picker.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class EditPersonalProfileScreen extends StatefulWidget {
-  // Recebe os dados da tela anterior para não precisar buscar de novo
   final Map<String, dynamic> userData;
 
   const EditPersonalProfileScreen({super.key, required this.userData});
@@ -16,21 +17,31 @@ class EditPersonalProfileScreen extends StatefulWidget {
 }
 
 class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
+  final AuthService _authService = AuthService();
+  final StorageService _storageService = StorageService();
+
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  // Controladores para os campos do formulário
   late final TextEditingController _nomeController;
   late final TextEditingController _telefoneController;
   late final TextEditingController _enderecoController;
   late final TextEditingController _cidadeController;
   late final TextEditingController _estadoController;
   String? _generoSelecionado;
+  String? _currentAvatarUrl;
+
+  final _profileImageNotifier = ValueNotifier<XFile?>(null);
+  final _imagePicker = ImagePicker();
+
+  final _phoneFormatter = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: {"#": RegExp(r'[0-9]')},
+  );
 
   @override
   void initState() {
     super.initState();
-    // Inicializa os controladores com os dados existentes
     _nomeController = TextEditingController(text: widget.userData['nome']);
     _telefoneController = TextEditingController(
       text: widget.userData['phoneNumber'],
@@ -41,6 +52,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
     _cidadeController = TextEditingController(text: widget.userData['city']);
     _estadoController = TextEditingController(text: widget.userData['state']);
     _generoSelecionado = widget.userData['genero'];
+    _currentAvatarUrl = widget.userData['avatar_url'];
   }
 
   @override
@@ -50,6 +62,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
     _enderecoController.dispose();
     _cidadeController.dispose();
     _estadoController.dispose();
+    _profileImageNotifier.dispose();
     super.dispose();
   }
 
@@ -61,44 +74,43 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final userId = supabase.auth.currentUser!.id;
-      await supabase
-          .from('usuarios')
-          .update({
-            'nome': _nomeController.text.trim(),
-            'phoneNumber': _telefoneController.text.trim(),
-            'full_address': _enderecoController.text.trim(),
-            'city': _cidadeController.text.trim(),
-            'state': _estadoController.text.trim(),
-            'genero': _generoSelecionado,
-          })
-          .eq('id', userId);
+      final userId = _authService.currentUser!.id;
+
+      String? newAvatarUrl;
+      if (_profileImageNotifier.value != null) {
+        newAvatarUrl = await _storageService.uploadAvatar(
+          userId,
+          _profileImageNotifier.value!,
+        );
+      }
+
+      final Map<String, dynamic> userUpdates = {
+        'nome': _nomeController.text.trim(),
+        'phoneNumber': _telefoneController.text.trim(),
+        'full_address': _enderecoController.text.trim(),
+        'city': _cidadeController.text.trim(),
+        'state': _estadoController.text.trim(),
+        'genero': _generoSelecionado,
+        if (newAvatarUrl != null) 'avatar_url': newAvatarUrl,
+      };
+
+      await _authService.updateUserData(userId, userUpdates);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Perfil atualizado com sucesso!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
-        // Volta para a tela-hub do perfil
-        Navigator.pop(context);
-      }
-    } on PostgrestException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: ${error.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ocorreu um erro: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -125,13 +137,18 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // TODO: Adicionar widget de upload de Avatar aqui
+              ImageUploadWidget(
+                profileImageNotifier: _profileImageNotifier,
+                imagePicker: _imagePicker,
+                initialImageUrl: _currentAvatarUrl,
+              ),
               const SizedBox(height: 24),
               TextFormField(
                 controller: _nomeController,
                 decoration: const InputDecoration(
                   labelText: 'Nome Completo',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
                 ),
                 validator: (value) =>
                     value!.isEmpty ? 'Nome não pode ser vazio' : null,
@@ -142,15 +159,18 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Telefone',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone_outlined),
                 ),
                 keyboardType: TextInputType.phone,
+                inputFormatters: [_phoneFormatter],
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _generoSelecionado,
+                initialValue: _generoSelecionado,
                 decoration: const InputDecoration(
                   labelText: 'Gênero',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.wc_outlined),
                 ),
                 items:
                     ['Masculino', 'Feminino', 'Outro', 'Prefiro não informar']
@@ -179,6 +199,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Endereço Completo (Rua, N°, Bairro)',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.home_outlined),
                 ),
               ),
               const SizedBox(height: 16),
@@ -191,6 +212,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Cidade',
                         border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.location_city_outlined),
                       ),
                     ),
                   ),
@@ -224,7 +246,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
                     : const Text('Salvar Alterações'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(
                     fontSize: 16,

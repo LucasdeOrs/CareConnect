@@ -1,6 +1,8 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/notification_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../main.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -10,66 +12,92 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  final AuthService _authService = AuthService();
+  final NotificationService _notificationService = NotificationService();
+
   late final Stream<List<Map<String, dynamic>>> _notificationsStream;
+  late final String _userId;
 
   @override
   void initState() {
     super.initState();
-    final userId = supabase.auth.currentUser!.id;
-    _notificationsStream = supabase
-        .from('notificacoes')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
+    final user = _authService.currentUser;
+    if (user == null) {
+      _userId = 'INVALID';
+      _notificationsStream = Stream.value([]);
+    } else {
+      _userId = user.id;
+      _notificationsStream = _notificationService.getNotificationsStream(
+        _userId,
+      );
+    }
   }
 
   Future<void> _markAsRead(String id) async {
     try {
-      await supabase
-          .from('notificacoes')
-          .update({'is_read': true}).eq('id', id);
+      await _notificationService.markAsRead(id);
     } catch (e) {
       debugPrint('Erro ao marcar notificação: $e');
+      _showError('Erro ao marcar como lida.');
     }
   }
 
   Future<void> _markAllAsRead() async {
-    final userId = supabase.auth.currentUser!.id;
+    if (_userId == 'INVALID') return;
     try {
-      await supabase
-          .from('notificacoes')
-          .update({'is_read': true})
-          .eq('user_id', userId)
-          .eq('is_read', false);
+      await _notificationService.markAllAsRead(_userId);
     } catch (e) {
       debugPrint('Erro ao marcar todas: $e');
+      _showError('Erro ao marcar todas como lidas.');
     }
   }
 
   Future<void> _deleteNotification(String id) async {
     try {
-      await supabase.from('notificacoes').delete().eq('id', id);
+      await _notificationService.deleteNotification(id);
     } catch (e) {
       debugPrint('Erro ao deletar notificação: $e');
+      _showError('Erro ao deletar notificação.');
     }
   }
 
   Icon _getIconForType(String type) {
+    Color color;
+    IconData icon;
     switch (type) {
       case 'agendamento':
-        return const Icon(Icons.calendar_month, color: Colors.blue);
+        color = AppColors.primary;
+        icon = Icons.calendar_month;
+        break;
       case 'chat':
-        return const Icon(Icons.chat_bubble, color: Colors.indigo);
+        color = AppColors.primary;
+        icon = Icons.chat_bubble;
+        break;
       case 'financeiro':
-        return const Icon(Icons.attach_money, color: Colors.green);
+        color = AppColors.success;
+        icon = Icons.attach_money;
+        break;
       case 'sistema':
       default:
-        return const Icon(Icons.notifications, color: Colors.orange);
+        color = AppColors.warning;
+        icon = Icons.notifications;
+        break;
+    }
+    return Icon(icon, color: color);
+  }
+
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppColors.error),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final dateFormat = AppFormatters.dateTime;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notificações'),
@@ -80,7 +108,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             icon: const Icon(Icons.done_all),
             tooltip: 'Marcar todas como lidas',
             onPressed: _markAllAsRead,
-          )
+            color: AppColors.primary,
+          ),
         ],
       ),
       backgroundColor: Colors.grey[50],
@@ -93,7 +122,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (snapshot.hasError) {
             return Center(child: Text('Erro: ${snapshot.error}'));
           }
-          
+
           final notifications = snapshot.data ?? [];
 
           if (notifications.isEmpty) {
@@ -101,8 +130,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_off_outlined,
-                      size: 64, color: Colors.grey.shade300),
+                  Icon(
+                    Icons.notifications_off_outlined,
+                    size: 64,
+                    color: Colors.grey.shade300,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Nenhuma notificação por enquanto.',
@@ -120,12 +152,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               final notification = notifications[index];
               final isRead = notification['is_read'] as bool;
               final date = DateTime.parse(notification['created_at']).toLocal();
-              final timeAgo = DateFormat('dd/MM HH:mm').format(date);
+              final timeAgo = dateFormat.format(date);
 
               return Dismissible(
                 key: Key(notification['id']),
                 background: Container(
-                  color: Colors.red,
+                  color: AppColors.error,
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
                   child: const Icon(Icons.delete, color: Colors.white),
@@ -135,7 +167,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   _deleteNotification(notification['id']);
                 },
                 child: Container(
-                  color: isRead ? Colors.white : Colors.blue.shade50,
+                  color: isRead ? Colors.white : AppColors.primaryLight,
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.white,
@@ -144,8 +176,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     title: Text(
                       notification['title'],
                       style: TextStyle(
-                        fontWeight:
-                            isRead ? FontWeight.normal : FontWeight.bold,
+                        fontWeight: isRead
+                            ? FontWeight.normal
+                            : FontWeight.bold,
                       ),
                     ),
                     subtitle: Column(
@@ -156,7 +189,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         const SizedBox(height: 4),
                         Text(
                           timeAgo,
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ],
                     ),
@@ -164,7 +200,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       if (!isRead) {
                         _markAsRead(notification['id']);
                       }
-                      // Futuro: Redirecionar baseado no 'related_id' e 'type'
                     },
                   ),
                 ),

@@ -1,7 +1,9 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/screens/auth/reset_password/update_password_screen.dart';
 import 'package:careconnect_app/screens/settings/help_center_screen.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/user_service.dart';
 import 'package:flutter/material.dart';
-import '../../main.dart';
 import '../auth/login/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -12,6 +14,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
+
   bool _notificationsEnabled = true;
   bool _emailUpdatesEnabled = false;
 
@@ -24,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Excluir Conta'),
+        backgroundColor: Colors.white,
         content: const Text(
           'Tem certeza? Todos os seus dados, agendamentos e histórico serão apagados permanentemente. Esta ação não pode ser desfeita.',
         ),
@@ -34,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             child: const Text(
               'Sim, Excluir',
               style: TextStyle(color: Colors.white),
@@ -46,13 +52,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirm == true) {
       try {
-        final userId = supabase.auth.currentUser!.id;
-        await supabase
-            .from('usuarios')
-            .update({'status': 'Deletado'})
-            .eq('id', userId);
+        final user = _authService.currentUser;
+        if (user == null) throw Exception('Usuário não autenticado.');
 
-        await supabase.auth.signOut();
+        await _userService.updateUserData(user.id, {'status': 'Deletado'});
+        await _authService.signOut();
 
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
@@ -60,14 +64,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             (route) => false,
           );
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sua conta foi desativada.')),
+            const SnackBar(
+              content: Text('Sua conta foi desativada.'),
+              backgroundColor: AppColors.success,
+            ),
           );
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Erro: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.error,
+            ),
+          );
         }
       }
     }
@@ -90,17 +100,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Notificações Push'),
             subtitle: const Text('Receber avisos sobre agendamentos e chat'),
             value: _notificationsEnabled,
-            activeThumbColor: Colors.indigo,
+            activeThumbColor: AppColors.primary,
             onChanged: (val) {
               setState(() => _notificationsEnabled = val);
-              // TODO: Salvar preferência localmente ou no banco
             },
           ),
           SwitchListTile(
             title: const Text('Novidades por E-mail'),
             subtitle: const Text('Receber promoções e atualizações'),
             value: _emailUpdatesEnabled,
-            activeThumbColor: Colors.indigo,
+            activeThumbColor: AppColors.primary,
             onChanged: (val) {
               setState(() => _emailUpdatesEnabled = val);
             },
@@ -133,13 +142,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
           ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: const Text(
-              'Excluir Minha Conta',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.delete_forever, color: AppColors.error),
+                SizedBox(width: 8),
+                Text(
+                  'Excluir Minha Conta',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
             onTap: _deleteAccount,
           ),
+
           const SizedBox(height: 32),
           const Center(
             child: Text(
@@ -159,7 +179,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          color: Colors.indigo.shade700,
+          color: AppColors.primary.shade700,
           fontWeight: FontWeight.bold,
           fontSize: 13,
         ),

@@ -1,4 +1,4 @@
-import 'package:careconnect_app/core/enums/user_type.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
 
 class UserModel {
   final String id;
@@ -23,13 +23,32 @@ class UserModel {
     this.fullAddress,
   });
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'nome': nome,
+      'email': email,
+      'avatar_url': avatarUrl,
+      'tipo': userType?.toDb,
+      'phoneNumber': phoneNumber,
+      'city': city,
+      'state': state,
+      'full_address': fullAddress,
+    };
+  }
+
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final userTypeString = json['tipo'] as String?;
+
     return UserModel(
       id: json['id'] ?? '',
       nome: json['nome'] ?? 'Usuário',
       email: json['email'],
       avatarUrl: json['avatar_url'],
-      userType: json['tipo'],
+      userType: userTypeString != null
+          ? UserType.fromString(userTypeString)
+          : null,
+
       phoneNumber: json['phoneNumber'],
       city: json['city'],
       state: json['state'],

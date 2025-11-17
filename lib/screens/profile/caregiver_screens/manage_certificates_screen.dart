@@ -1,10 +1,9 @@
-import 'dart:io';
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
-import 'package:flutter/foundation.dart';
+import 'package:careconnect_app/screens/home/widgets/caregiver_detail_modal.dart';
+import 'package:careconnect_app/services/certificate_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ManageCertificatesScreen extends StatefulWidget {
   final CaregiverProfile caregiverProfile;
@@ -16,6 +15,8 @@ class ManageCertificatesScreen extends StatefulWidget {
 }
 
 class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
+  final CertificateService _certificateService = CertificateService();
+
   late List<Map<String, String>> _certificates;
   bool _isLoading = false;
   String? _uploadingMessage;
@@ -32,51 +33,52 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
-      withData: kIsWeb,
+      withData: true,
     );
 
-    if (result != null &&
-        (result.files.single.path != null ||
-            result.files.single.bytes != null)) {
-      final file = result.files.single;
-      final fileName = file.name;
-      final filePath = '${widget.caregiverProfile.id}/certificates/$fileName';
+    if (result == null || result.files.single.bytes == null) return;
+
+    final file = result.files.single;
+    final fileName = file.name;
+
+    setState(() {
+      _isLoading = true;
+      _uploadingMessage = 'Enviando arquivo: $fileName...';
+    });
+
+    try {
+      final Map<String, String> newCertificate = await _certificateService
+          .uploadCertificate(
+            caregiverId: widget.caregiverProfile.id,
+            fileName: fileName,
+            fileBytes: file.bytes!,
+            mimeType: null,
+          );
+
+      final newList = [..._certificates, newCertificate];
+      await _certificateService.updateCertificateListInDatabase(
+        caregiverId: widget.caregiverProfile.id,
+        newList: newList,
+      );
 
       setState(() {
-        _isLoading = true;
-        _uploadingMessage = 'Enviando arquivo: $fileName...';
+        _certificates = newList;
       });
 
-      try {
-        final fileBytes = kIsWeb
-            ? file.bytes!
-            : await File(file.path!).readAsBytes();
-
-        await supabase.storage
-            .from('certificates')
-            .uploadBinary(
-              filePath,
-              fileBytes,
-              fileOptions: FileOptions(
-                upsert: true,
-                contentType: file.extension != null
-                    ? 'image/${file.extension}'
-                    : 'application/pdf',
-              ),
-            );
-
-        final publicUrl = supabase.storage
-            .from('certificates')
-            .getPublicUrl(filePath);
-
-        final newCertificate = {'name': fileName, 'url': publicUrl};
-
-        await _updateDatabase([..._certificates, newCertificate]);
-      } on StorageException catch (e) {
-        _showError('Erro de Storage: ${e.message}');
-      } catch (e) {
-        _showError('Erro ao enviar: $e');
-      } finally {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Certificado enviado e salvo!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      _showError(
+        'Erro ao enviar: ${e.toString().replaceAll('Exception: ', '')}',
+      );
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoading = false;
           _uploadingMessage = null;
@@ -101,7 +103,9 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ), // Cor
             child: const Text(
               'Sim, Excluir',
               style: TextStyle(color: Colors.white),
@@ -120,16 +124,20 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
 
     try {
       final url = certificate['url']!;
-      final path = url.split('/certificates/').last;
 
-      await supabase.storage.from('certificates').remove([path]);
+      await _certificateService.deleteCertificate(
+        caregiverId: widget.caregiverProfile.id,
+        filePathInBucket: url,
+        currentCertificates: _certificates,
+      );
 
-      final newList = List<Map<String, String>>.from(_certificates);
-      newList.removeWhere((c) => c['url'] == url);
-
-      await _updateDatabase(newList);
+      setState(() {
+        _certificates.removeWhere((c) => c['url'] == url);
+      });
     } catch (e) {
-      _showError('Erro ao excluir: $e');
+      _showError(
+        'Erro ao excluir: ${e.toString().replaceAll('Exception: ', '')}',
+      );
     } finally {
       setState(() {
         _isLoading = false;
@@ -182,9 +190,18 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
         final newList = List<Map<String, String>>.from(_certificates);
         newList[index] = {'name': novoNome, 'url': certificate['url']!};
 
-        await _updateDatabase(newList);
+        await _certificateService.updateCertificateListInDatabase(
+          caregiverId: widget.caregiverProfile.id,
+          newList: newList,
+        );
+
+        setState(() {
+          _certificates = newList;
+        });
       } catch (e) {
-        _showError('Erro ao renomear: $e');
+        _showError(
+          'Erro ao renomear: ${e.toString().replaceAll('Exception: ', '')}',
+        );
       } finally {
         setState(() {
           _isLoading = false;
@@ -197,7 +214,7 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
   void _showPreview(String url, String name) {
     String validUrl = url;
     if (!url.startsWith('http')) {
-      validUrl = supabase.storage.from('certificates').getPublicUrl(url);
+      validUrl = _certificateService.getPublicUrl(url);
     }
 
     Navigator.of(context).push(
@@ -209,21 +226,10 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
     );
   }
 
-  Future<void> _updateDatabase(List<Map<String, String>> newList) async {
-    await supabase
-        .from('cuidadores')
-        .update({'certificado_url': newList})
-        .eq('id', widget.caregiverProfile.id);
-
-    setState(() {
-      _certificates = newList;
-    });
-  }
-
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+        SnackBar(content: Text(message), backgroundColor: AppColors.error),
       );
     }
   }
@@ -239,7 +245,7 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
       backgroundColor: Colors.grey[50],
       floatingActionButton: FloatingActionButton(
         onPressed: _isLoading ? null : _pickAndUploadFile,
-        backgroundColor: _isLoading ? Colors.grey : Colors.indigo,
+        backgroundColor: _isLoading ? Colors.grey : AppColors.primary,
         foregroundColor: Colors.white,
         tooltip: 'Adicionar Certificado',
         child: _isLoading
@@ -261,11 +267,25 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
             ),
           Expanded(
             child: _certificates.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Nenhum certificado enviado.\nToque no botão + para adicionar.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.insert_drive_file_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Nenhum certificado enviado.\nToque no botão + para adicionar.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 : ListView.builder(
@@ -292,7 +312,7 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
                             isPdf
                                 ? Icons.picture_as_pdf_rounded
                                 : Icons.image_rounded,
-                            color: isPdf ? Colors.red : Colors.blue,
+                            color: isPdf ? AppColors.error : AppColors.primary,
                             size: 32,
                           ),
                           title: Text(
@@ -315,7 +335,11 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
                                 value: 'view',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.visibility, size: 20),
+                                    Icon(
+                                      Icons.visibility,
+                                      size: 20,
+                                      color: Colors.blueGrey,
+                                    ),
                                     SizedBox(width: 8),
                                     Text('Visualizar'),
                                   ],
@@ -335,9 +359,16 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
                                 value: 'delete',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.delete, size: 20),
+                                    Icon(
+                                      Icons.delete,
+                                      size: 20,
+                                      color: AppColors.error,
+                                    ),
                                     SizedBox(width: 8),
-                                    Text('Excluir'),
+                                    Text(
+                                      'Excluir',
+                                      style: TextStyle(color: AppColors.error),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -349,60 +380,6 @@ class _ManageCertificatesScreenState extends State<ManageCertificatesScreen> {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class FullScreenImageViewer extends StatelessWidget {
-  final String imageUrl;
-  final String title;
-
-  const FullScreenImageViewer({
-    super.key,
-    required this.imageUrl,
-    required this.title,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          title,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          panEnabled: true,
-          minScale: 0.5,
-          maxScale: 4.0,
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.contain,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return const CircularProgressIndicator(color: Colors.white);
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.broken_image, color: Colors.white54, size: 50),
-                  SizedBox(height: 8),
-                  Text(
-                    "Não foi possível carregar a imagem.",
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
       ),
     );
   }

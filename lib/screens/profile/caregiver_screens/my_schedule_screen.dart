@@ -1,9 +1,9 @@
-// lib/screens/profile/minha_agenda_screen.dart
-
 import 'dart:async';
-import 'package:careconnect_app/main.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/screens/profile/widgets/advanced_block_dialog.dart';
+import 'package:careconnect_app/services/caregiver_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -17,6 +17,8 @@ class MinhaAgendaScreen extends StatefulWidget {
 }
 
 class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
+  final CaregiverService _caregiverService = CaregiverService();
+
   late final String _cuidadorId;
   late final Stream<List<Map<String, dynamic>>> _bloqueiosStream;
 
@@ -33,11 +35,7 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
     _cuidadorId = widget.caregiverProfile.id;
     _selectedDay = _focusedDay;
 
-    _bloqueiosStream = supabase
-        .from('bloqueios_agenda')
-        .stream(primaryKey: ['id'])
-        .eq('cuidador_id', _cuidadorId)
-        .order('hora_inicio', ascending: true);
+    _bloqueiosStream = _caregiverService.getBlocksStream(_cuidadorId);
 
     _streamSubscription = _bloqueiosStream.listen((listaDeBloqueios) {
       _updateEventsMap(listaDeBloqueios);
@@ -68,15 +66,12 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
 
   Future<void> _refetchData() async {
     try {
-      final listaDeBloqueios = await supabase
-          .from('bloqueios_agenda')
-          .select()
-          .eq('cuidador_id', _cuidadorId)
-          .order('hora_inicio', ascending: true);
-
+      final listaDeBloqueios = (await _caregiverService
+          .getBlocksStream(_cuidadorId)
+          .first);
       _updateEventsMap(listaDeBloqueios);
     } catch (e) {
-      debugPrint("Erro ao re-buscar dados: $e");
+      _showError("Erro ao recarregar dados: $e");
     }
   }
 
@@ -87,18 +82,6 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
 
   double _timeOfDayToDouble(TimeOfDay time) {
     return time.hour + (time.minute / 60.0);
-  }
-
-  double _timeStringToDouble(String timeStr) {
-    try {
-      final parts = timeStr.split(':');
-      final hour = int.parse(parts[0]);
-      final minute = int.parse(parts[1]);
-      return hour + (minute / 60.0);
-    } catch (e) {
-      debugPrint("Erro ao converter time string: $e");
-      return 0.0;
-    }
   }
 
   Future<void> _addNovoBloqueio() async {
@@ -135,37 +118,28 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
     final horaFimStr =
         '${fim.hour.toString().padLeft(2, '0')}:${fim.minute.toString().padLeft(2, '0')}';
 
-    final eventosDoDia = _getEventsForDay(dataSelecionada);
-    for (var evento in eventosDoDia) {
-      final existingStart = _timeStringToDouble(evento['hora_inicio']);
-      final existingEnd = _timeStringToDouble(evento['hora_fim']);
-
-      if (inicioDouble < existingEnd && fimDouble > existingStart) {
-        _showError('Este horário conflita com um bloqueio já existente.');
+    try {
+      final alreadyBlocked = await _caregiverService.checkExistingBlockConflict(
+        cuidadorId: _cuidadorId,
+        dateStr: dataFormatada,
+        newStart: inicioDouble,
+        newEnd: fimDouble,
+      );
+      if (alreadyBlocked) {
+        _showError('Este horário já está bloqueado.');
         return;
       }
-    }
 
-    try {
-      final agendamentos = await supabase
-          .from('agendamentos')
-          .select('id, hora_inicio, hora_fim')
-          .eq('cuidador_id', _cuidadorId)
-          .eq('data_agendamento', dataFormatada)
-          .inFilter('status', ['pago', 'confirmado']);
+      final conflictingIds = await _caregiverService
+          .checkAndCancelConflictingAppointments(
+            cuidadorId: _cuidadorId,
+            dateStrings: [dataFormatada],
+            newStart: inicioDouble,
+            newEnd: fimDouble,
+          );
 
-      List<String> conflictingAppointmentIds = [];
-      for (var agendamento in agendamentos) {
-        final existingStart = _timeStringToDouble(agendamento['hora_inicio']);
-        final existingEnd = _timeStringToDouble(agendamento['hora_fim']);
-
-        if (inicioDouble < existingEnd && fimDouble > existingStart) {
-          conflictingAppointmentIds.add(agendamento['id'] as String);
-        }
-      }
-
-      if (conflictingAppointmentIds.isNotEmpty) {
-        final count = conflictingAppointmentIds.length;
+      if (conflictingIds.isNotEmpty) {
+        final count = conflictingIds.length;
         final confirma = await showDialog<bool>(
           // ignore: use_build_context_synchronously
           context: context,
@@ -176,46 +150,27 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
                   : 'Agendamentos em Conflito',
             ),
             content: Text(
-              'Você tem $count agendamento(s) neste horário. Se continuar, ele(s) será(ão) cancelado(s) e o(s) familiar(es) reembolsado(s). Deseja continuar?',
+              'Você tinha $count agendamento(s) neste horário. Eles foram cancelado(s) e o(s) familiar(es) reembolsado(s).',
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Voltar'),
-              ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text(
-                  'Sim, Cancelar Agendamento(s)',
-                  style: TextStyle(color: Colors.white),
-                ),
+                child: const Text('OK'),
               ),
             ],
           ),
         );
-
-        if (confirma != true) {
-          return;
-        }
-
-        await supabase
-            .from('agendamentos')
-            .update({'status': 'cancelado'})
-            .inFilter('id', conflictingAppointmentIds);
+        if (confirma != true) return;
       }
-    } catch (e) {
-      _showError('Erro ao verificar conflitos: $e');
-      return;
-    }
 
-    try {
-      await supabase.from('bloqueios_agenda').insert({
-        'cuidador_id': _cuidadorId,
-        'data_bloqueio': dataFormatada,
-        'hora_inicio': horaInicioStr,
-        'hora_fim': horaFimStr,
-      });
+      await _caregiverService.addBlocks([
+        {
+          'cuidador_id': _cuidadorId,
+          'data_bloqueio': dataFormatada,
+          'hora_inicio': horaInicioStr,
+          'hora_fim': horaFimStr,
+        },
+      ]);
 
       await _refetchData();
     } catch (e) {
@@ -236,7 +191,7 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text(
               'Sim, Remover',
               style: TextStyle(color: Colors.white),
@@ -248,8 +203,17 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
 
     if (confirma == true) {
       try {
-        await supabase.from('bloqueios_agenda').delete().eq('id', bloqueioId);
+        await _caregiverService.deleteBlock(bloqueioId);
         await _refetchData();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Bloqueio removido com sucesso."),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       } catch (e) {
         _showError('Erro ao remover bloqueio: $e');
       }
@@ -259,7 +223,10 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
   void _showError(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(message.replaceAll('Exception: ', '')),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -267,7 +234,7 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
   void _showAdvancedBlockDialog() async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
-      isScrollControlled: true, // Permite que o modal cresça
+      isScrollControlled: true,
       builder: (context) => const AdvancedBlockDialog(),
     );
 
@@ -277,7 +244,6 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
   }
 
   Future<void> _executeAdvancedBlock(Map<String, dynamic> blockData) async {
-    // Extrai os dados do resultado do dialog
     final TimeOfDay startTime = blockData['startTime'];
     final TimeOfDay endTime = blockData['endTime'];
     final DateTime startDate = blockData['startDate'];
@@ -311,8 +277,8 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
         .map((d) => DateFormat('yyyy-MM-dd').format(d))
         .toList();
 
-    // Mostra um spinner
     if (mounted) {
+      // ignore: use_build_context_synchronously
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -321,90 +287,58 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
     }
 
     try {
-      // 2. Verificar conflitos de AGENDAMENTO
-      final agendamentos = await supabase
-          .from('agendamentos')
-          .select('id, hora_inicio, hora_fim')
-          .eq('cuidador_id', _cuidadorId)
-          .inFilter('data_agendamento', dateStrings)
-          .inFilter('status', ['pago', 'confirmado']);
+      final conflictingIds = await _caregiverService
+          .checkAndCancelConflictingAppointments(
+            cuidadorId: _cuidadorId,
+            dateStrings: dateStrings,
+            newStart: newStart,
+            newEnd: newEnd,
+          );
 
-      List<String> conflictingAppointmentIds = [];
-      for (var agendamento in agendamentos) {
-        final existingStart = _timeStringToDouble(agendamento['hora_inicio']);
-        final existingEnd = _timeStringToDouble(agendamento['hora_fim']);
-        if (newStart < existingEnd && newEnd > existingStart) {
-          conflictingAppointmentIds.add(agendamento['id'] as String);
-        }
-      }
+      if (conflictingIds.isNotEmpty) {
+        final count = conflictingIds.length;
+        if (mounted) Navigator.pop(context);
 
-      // 3. Confirmar cancelamento de agendamentos
-      if (conflictingAppointmentIds.isNotEmpty) {
-        final count = conflictingAppointmentIds.length;
-        final confirma = await showDialog<bool>(
+        await showDialog<bool>(
           // ignore: use_build_context_synchronously
           context: context,
           builder: (context) => AlertDialog(
             title: Text(
-              count == 1
-                  ? 'Agendamento em Conflito'
-                  : 'Agendamentos em Conflito',
+              count == 1 ? 'Agendamento Cancelado' : 'Agendamentos Cancelados',
             ),
             content: Text(
-              'Encontramos $count agendamento(s) que conflitam com este bloqueio. Se continuar, eles serão cancelados. Deseja continuar?',
+              'Encontramos $count agendamento(s) que conflitaram. Eles foram automaticamente cancelados e o(s) familiar(es) reembolsado(s).',
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Voltar'),
-              ),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text(
-                  'Sim, Cancelar Agendamento(s)',
-                  style: TextStyle(color: Colors.white),
-                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Continuar'),
               ),
             ],
           ),
         );
-
-        if (confirma != true) {
-          // Tira o spinner
-          if (mounted) Navigator.pop(context);
-          return;
-        }
-
-        // Cancela os agendamentos
-        await supabase
-            .from('agendamentos')
-            .update({'status': 'cancelado'})
-            .inFilter('id', conflictingAppointmentIds);
-      }
-
-      // 4. Verificar conflitos de BLOQUEIO (para não duplicar)
-      final bloqueios = await supabase
-          .from('bloqueios_agenda')
-          .select('data_bloqueio, hora_inicio, hora_fim')
-          .eq('cuidador_id', _cuidadorId)
-          .inFilter('data_bloqueio', dateStrings);
-
-      Set<String> conflictingBlockDates = {};
-      for (var bloqueio in bloqueios) {
-        final existingStart = _timeStringToDouble(bloqueio['hora_inicio']);
-        final existingEnd = _timeStringToDouble(bloqueio['hora_fim']);
-        if (newStart < existingEnd && newEnd > existingStart) {
-          conflictingBlockDates.add(bloqueio['data_bloqueio'] as String);
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) =>
+                const Center(child: CircularProgressIndicator()),
+          );
         }
       }
 
-      // 5. Preparar o INSERT em massa
       List<Map<String, dynamic>> newBlocksToInsert = [];
       for (var date in datesToBlock) {
         final dateStr = DateFormat('yyyy-MM-dd').format(date);
-        // Só insere se NÃO houver conflito de bloqueio
-        if (!conflictingBlockDates.contains(dateStr)) {
+        final alreadyBlocked = await _caregiverService
+            .checkExistingBlockConflict(
+              cuidadorId: _cuidadorId,
+              dateStr: dateStr,
+              newStart: newStart,
+              newEnd: newEnd,
+            );
+
+        if (!alreadyBlocked) {
           newBlocksToInsert.add({
             'cuidador_id': _cuidadorId,
             'data_bloqueio': dateStr,
@@ -414,28 +348,24 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
         }
       }
 
-      // 6. Executar o INSERT
       if (newBlocksToInsert.isNotEmpty) {
-        await supabase.from('bloqueios_agenda').insert(newBlocksToInsert);
+        await _caregiverService.addBlocks(newBlocksToInsert);
       }
 
-      // 7. Fechar o spinner e recarregar os dados
       if (mounted) Navigator.pop(context);
       await _refetchData();
 
-      // Feedback final
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               '${newBlocksToInsert.length} bloqueios criados com sucesso!',
             ),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
       }
     } catch (e) {
-      // Fecha o spinner em caso de erro
       if (mounted) Navigator.pop(context);
       _showError('Erro ao processar bloqueio em massa: $e');
     }
@@ -457,29 +387,28 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
           if (value == 'single') {
             _addNovoBloqueio();
           } else if (value == 'advanced') {
-            // 4. CHAMA A FUNÇÃO ATUALIZADA
             _showAdvancedBlockDialog();
           }
         },
         itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'single',
             child: ListTile(
-              leading: Icon(Icons.block),
-              title: Text('Bloquear um horário'),
+              leading: const Icon(Icons.block, color: AppColors.primary),
+              title: const Text('Bloquear um horário'),
             ),
           ),
-          const PopupMenuItem<String>(
+          PopupMenuItem<String>(
             value: 'advanced',
             child: ListTile(
-              leading: Icon(Icons.date_range),
-              title: Text('Bloqueio avançado'),
+              leading: const Icon(Icons.date_range, color: AppColors.primary),
+              title: const Text('Bloqueio avançado'),
             ),
           ),
         ],
         child: FloatingActionButton(
           onPressed: null,
-          backgroundColor: Colors.indigo,
+          backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           tooltip: 'Adicionar Bloqueio',
           child: const Icon(Icons.add),
@@ -490,7 +419,6 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
           Container(
             color: Colors.white,
             child: TableCalendar(
-              // ... (código do TableCalendar não muda)
               locale: 'pt_BR',
               firstDay: DateTime.now().subtract(const Duration(days: 30)),
               lastDay: DateTime.now().add(const Duration(days: 365)),
@@ -514,15 +442,24 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
               onPageChanged: (focusedDay) {
                 _focusedDay = focusedDay;
               },
-              calendarStyle: const CalendarStyle(
-                markerDecoration: BoxDecoration(
-                  color: Colors.red,
+              calendarStyle: CalendarStyle(
+                todayDecoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                markerDecoration: const BoxDecoration(
+                  color: AppColors.error,
                   shape: BoxShape.circle,
                 ),
               ),
               headerStyle: const HeaderStyle(
                 formatButtonVisible: false,
                 titleCentered: true,
+                titleTextStyle: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -531,7 +468,7 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
             child: (eventosDoDia.isEmpty)
                 ? Center(
                     child: Text(
-                      'Nenhum bloqueio para\n${DateFormat('dd/MM/yyyy').format(_selectedDay ?? _focusedDay)}',
+                      'Nenhum bloqueio para\n${AppFormatters.date.format(_selectedDay ?? _focusedDay)}',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 16, color: Colors.grey),
                     ),
@@ -555,7 +492,10 @@ class _MinhaAgendaScreenState extends State<MinhaAgendaScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: ListTile(
-                          leading: const Icon(Icons.block, color: Colors.red),
+                          leading: const Icon(
+                            Icons.block,
+                            color: AppColors.error,
+                          ),
                           title: Text(
                             'Bloqueado: ${inicio.format(context)} às ${fim.format(context)}',
                             style: const TextStyle(fontWeight: FontWeight.w500),

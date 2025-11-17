@@ -1,3 +1,4 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'login/login_screen.dart';
 
@@ -27,14 +28,18 @@ class CheckEmailScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.mail_outline, size: 100, color: Colors.indigo),
+              const Icon(
+                Icons.mail_outline,
+                size: 100,
+                color: AppColors.primary,
+              ),
               const SizedBox(height: 32),
               const Text(
                 'Verifique seu e-mail!',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.indigo,
+                  color: AppColors.primary,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -58,7 +63,7 @@ class CheckEmailScreen extends StatelessWidget {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () {

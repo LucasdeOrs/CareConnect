@@ -1,18 +1,14 @@
-// [COLE ESTE CÓDIGO INTEIRO EM: step1_personal.dart]
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../../../../../widgets/image_upload_widget.dart';
+import '../../../../core/widgets/image_upload_widget.dart';
 
 class Step1Personal extends StatefulWidget {
   final GlobalKey<FormState> formKey;
   final AutovalidateMode autovalidateMode;
-
-  // CAMPOS DESTE STEP
   final TextEditingController cpfController;
   final TextEditingController birthDateController;
   final TextEditingController fullAddressController;
@@ -37,7 +33,6 @@ class Step1Personal extends StatefulWidget {
 }
 
 class _Step1PersonalState extends State<Step1Personal> {
-  // Formatadores
   final _cpfFormatter = MaskTextInputFormatter(
     mask: '###.###.###-##',
     filter: {"#": RegExp(r'[0-9]')},
@@ -47,7 +42,6 @@ class _Step1PersonalState extends State<Step1Personal> {
     filter: {"#": RegExp(r'[0-9]')},
   );
 
-  // Lista de Gênero
   final List<String> _generoOptions = [
     'Masculino',
     'Feminino',
@@ -55,10 +49,7 @@ class _Step1PersonalState extends State<Step1Personal> {
     'Prefiro não informar',
   ];
 
-  // Upload de Imagem
   final _imagePicker = ImagePicker();
-
-  // API de Cidades
   static List<String> _todasCidadesComUF = [];
   static bool _isLoadingApi = false;
   bool _isLocalLoading = false;
@@ -69,7 +60,6 @@ class _Step1PersonalState extends State<Step1Personal> {
     _carregarCidades();
   }
 
-  // --- Funções de Validação ---
   String? _validateRequired(String? value, String fieldName) {
     if (value == null || value.trim().isEmpty) {
       return '$fieldName é obrigatório(a)';
@@ -85,8 +75,9 @@ class _Step1PersonalState extends State<Step1Personal> {
   }
 
   String? _validateBirthDate(String? value) {
-    if (value == null || value.isEmpty)
+    if (value == null || value.isEmpty) {
       return 'Data de Nascimento é obrigatória';
+    }
     try {
       final date = DateFormat('dd/MM/yyyy', 'pt_BR').parseStrict(value);
       final eighteenYearsAgo = DateTime.now().subtract(
@@ -100,8 +91,9 @@ class _Step1PersonalState extends State<Step1Personal> {
   }
 
   String? _validateCidadeUF(String? value) {
-    if (value == null || value.trim().isEmpty)
+    if (value == null || value.trim().isEmpty) {
       return 'O campo Cidade é obrigatório';
+    }
     final parts = value.split(', ');
     if (parts.length != 2) return 'Formato inválido. (Ex: Cidade, UF)';
     if (_todasCidadesComUF.isNotEmpty &&
@@ -111,7 +103,6 @@ class _Step1PersonalState extends State<Step1Personal> {
     return null;
   }
 
-  // --- Funções Auxiliares ---
   Future<void> _selectDate(BuildContext context) async {
     final DateTime eighteenYearsAgo = DateTime.now().subtract(
       const Duration(days: 365 * 18 + 4),
@@ -174,6 +165,7 @@ class _Step1PersonalState extends State<Step1Personal> {
             decoration: const InputDecoration(
               labelText: 'CPF*',
               border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.badge_outlined),
             ),
             keyboardType: TextInputType.number,
             inputFormatters: [_cpfFormatter],
@@ -187,8 +179,9 @@ class _Step1PersonalState extends State<Step1Personal> {
             ),
             optionsBuilder: (TextEditingValue textEditingValue) {
               if (_isLocalLoading) return ["Carregando cidades..."];
-              if (textEditingValue.text.isEmpty)
+              if (textEditingValue.text.isEmpty) {
                 return const Iterable<String>.empty();
+              }
               final query = textEditingValue.text.toLowerCase();
               return _todasCidadesComUF.where((String option) {
                 return option.toLowerCase().contains(query);
@@ -205,6 +198,7 @@ class _Step1PersonalState extends State<Step1Personal> {
                   labelText: 'Cidade e Estado*',
                   hintText: 'Ex: São Paulo, SP',
                   border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.location_city_outlined),
                   suffixIcon: _isLocalLoading
                       ? const Padding(
                           padding: EdgeInsets.all(8.0),
@@ -223,6 +217,7 @@ class _Step1PersonalState extends State<Step1Personal> {
             decoration: const InputDecoration(
               labelText: 'Endereço Completo (Rua, N°, Bairro)*',
               border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.home_outlined),
             ),
             validator: (value) => _validateRequired(value, 'Endereço'),
             autovalidateMode: widget.autovalidateMode,
@@ -235,6 +230,7 @@ class _Step1PersonalState extends State<Step1Personal> {
               labelText: 'Data de Nascimento*',
               hintText: 'dd/MM/yyyy',
               border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.cake_outlined),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.calendar_today),
                 onPressed: () => _selectDate(context),
@@ -246,10 +242,11 @@ class _Step1PersonalState extends State<Step1Personal> {
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: widget.selectedGeneroNotifier.value,
+            initialValue: widget.selectedGeneroNotifier.value,
             decoration: const InputDecoration(
               labelText: 'Gênero*',
               border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.wc_outlined),
             ),
             items: _generoOptions.map((String genero) {
               return DropdownMenuItem<String>(

@@ -1,8 +1,8 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart'; // Para acessar 'supabase'
-import '../../../widgets/logo_widget.dart'; // Opcional
-import '../login/login_screen.dart'; // Para redirecionar
+import '../../../core/widgets/logo_widget.dart';
+import '../login/login_screen.dart';
 
 class UpdatePasswordScreen extends StatefulWidget {
   const UpdatePasswordScreen({super.key});
@@ -12,6 +12,8 @@ class UpdatePasswordScreen extends StatefulWidget {
 }
 
 class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
+  final AuthService _authService = AuthService();
+
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -28,34 +30,27 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     final newPassword = _passwordController.text.trim();
 
     try {
-      await supabase.auth.updateUser(UserAttributes(password: newPassword));
+      await _authService.updatePassword(newPassword);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Senha atualizada com sucesso!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
-        // Redireciona para o Login, limpando todas as telas anteriores
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
           (route) => false,
         );
       }
-    } on AuthException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message), backgroundColor: Colors.red),
-        );
-      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Erro ao atualizar senha. Tente novamente.'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: Text(error.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -80,8 +75,6 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
         title: const Text('Criar Nova Senha'),
         backgroundColor: Colors.white,
         elevation: 1,
-        // Remove o botão de voltar, pois o usuário não deve
-        // navegar para trás neste estado
         automaticallyImplyLeading: false,
       ),
       backgroundColor: Colors.white,
@@ -93,12 +86,16 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              const LogoWidget(size: 150), // Opcional
+              const LogoWidget(size: 150),
               const SizedBox(height: 40),
-              const Text(
+              Text(
                 'Crie sua nova senha',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
               ),
               const SizedBox(height: 16),
               const Text(
@@ -171,7 +168,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.indigo,
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   textStyle: const TextStyle(
                     fontSize: 16,

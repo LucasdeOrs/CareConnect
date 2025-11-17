@@ -1,30 +1,25 @@
-import 'package:careconnect_app/screens/auth/register_caregiver/widgets/step2_professional.dart';
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../models/named_certificate_model.dart';
+
 class CertificateUploadWidget extends StatelessWidget {
   final ValueNotifier<List<NamedCertificate>> uploadedCertificatesNotifier;
+  final AutovalidateMode autovalidateMode;
 
   const CertificateUploadWidget({
     super.key,
     required this.uploadedCertificatesNotifier,
+    this.autovalidateMode = AutovalidateMode.disabled,
   });
 
   Future<void> _pickCertificates(BuildContext context) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: [
-          'png',
-          'jpg',
-          'jpeg',
-          'svg',
-          'pdf',
-          'docx',
-          'doc',
-          'webp',
-        ],
+        allowedExtensions: ['png', 'jpg', 'jpeg', 'pdf'],
         allowMultiple: true,
         withData: true,
       );
@@ -34,7 +29,9 @@ class CertificateUploadWidget extends StatelessWidget {
             .where((file) => file.name.isNotEmpty)
             .map((file) {
               final fileName = file.name;
-              final nameWithoutExtension = fileName.split('.').first;
+              final nameWithoutExtension = fileName.lastIndexOf('.') != -1
+                  ? fileName.substring(0, fileName.lastIndexOf('.'))
+                  : fileName;
               return NamedCertificate(
                 file: file,
                 name: nameWithoutExtension.isEmpty
@@ -54,6 +51,7 @@ class CertificateUploadWidget extends StatelessWidget {
               content: Text(
                 '${result.files.length} certificado(s) adicionado(s).',
               ),
+              backgroundColor: AppColors.success,
             ),
           );
         }
@@ -61,14 +59,20 @@ class CertificateUploadWidget extends StatelessWidget {
     } on PlatformException catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao selecionar arquivos: $e')),
+          SnackBar(
+            content: Text('Erro ao selecionar arquivos: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erro inesperado: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro inesperado: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
       }
     }
   }
@@ -77,7 +81,7 @@ class CertificateUploadWidget extends StatelessWidget {
     uploadedCertificatesNotifier.value = uploadedCertificatesNotifier.value
         .where((c) => c != certificate)
         .toList();
-    certificate.controller.dispose();
+    certificate.dispose();
   }
 
   @override
@@ -86,7 +90,7 @@ class CertificateUploadWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Certificados e Cursos',
+          'Certificados e Cursos (Opcional)',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 12),
@@ -95,7 +99,7 @@ class CertificateUploadWidget extends StatelessWidget {
           icon: const Icon(Icons.upload_file),
           label: const Padding(
             padding: EdgeInsets.only(left: 8.0),
-            child: Text('Upload de certificados (PNG, PDF, etc.)'),
+            child: Text('Upload de certificados (PDF, PNG, JPG)'),
           ),
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
@@ -128,12 +132,19 @@ class CertificateUploadWidget extends StatelessWidget {
                                 TextFormField(
                                   controller: cert.controller,
                                   decoration: const InputDecoration(
-                                    labelText: 'Nome do Certificado',
+                                    labelText: 'Nome do Certificado*',
                                     border: OutlineInputBorder(),
                                     isDense: true,
                                   ),
                                   onChanged: (newName) => cert.name = newName,
                                   textCapitalization: TextCapitalization.words,
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Nome obrigatório';
+                                    }
+                                    return null;
+                                  },
+                                  autovalidateMode: autovalidateMode,
                                 ),
                                 const SizedBox(height: 4),
                                 Text(

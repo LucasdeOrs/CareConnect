@@ -1,13 +1,13 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/location_service.dart';
+import 'package:careconnect_app/services/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-
-import '../../../main.dart';
-import '../../../widgets/image_upload_widget.dart';
+import '../../../core/widgets/image_upload_widget.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
   const CompleteProfileScreen({super.key});
@@ -17,8 +17,11 @@ class CompleteProfileScreen extends StatefulWidget {
 }
 
 class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
+  final AuthService _authService = AuthService();
+  final StorageService _storageService = StorageService();
+
   final _formKey = GlobalKey<FormState>();
-  final User? _user = supabase.auth.currentUser;
+  late final User? _user = _authService.currentUser;
   bool _isLoading = false;
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
@@ -32,8 +35,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final _profileImageNotifier = ValueNotifier<XFile?>(null);
   final _imagePicker = ImagePicker();
 
-  static List<String> _todasCidadesComUF = [];
-  static bool _isLoadingApi = false;
+  List<String> _todasCidadesComUF = [];
   bool _isLocalLoading = false;
 
   final _birthDateFormatter = MaskTextInputFormatter(
@@ -127,27 +129,27 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 
   Future<void> _carregarCidades() async {
-    if (_todasCidadesComUF.isNotEmpty || _isLoadingApi) return;
-    _isLoadingApi = true;
+    if (LocationService.citiesCache.isNotEmpty) {
+      setState(() {
+        _todasCidadesComUF = LocationService.citiesCache;
+      });
+      return;
+    }
+
     if (mounted) setState(() => _isLocalLoading = true);
     try {
-      final url = Uri.parse(
-        'https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome',
-      );
-      final response = await http.get(url);
-      if (response.statusCode == 200 && mounted) {
-        final List<dynamic> data = json.decode(response.body);
-        _todasCidadesComUF = data.map((item) {
-          final String nome = item['nome'];
-          final String uf =
-              item['regiao-imediata']['regiao-intermediaria']['UF']['sigla'];
-          return "$nome, $uf";
-        }).toList();
-      }
+      _todasCidadesComUF = await LocationService.getBrazilianCities();
     } catch (e) {
       debugPrint("Erro ao carregar cidades: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } finally {
-      _isLoadingApi = false;
       if (mounted) {
         setState(() => _isLocalLoading = false);
       }
@@ -173,24 +175,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       final profileImage = _profileImageNotifier.value;
 
       if (profileImage != null) {
-        final fileExt = profileImage.name.split('.').last.toLowerCase();
-        final filePath = '${_user.id}/profile.$fileExt';
-        final fileBytes = await profileImage.readAsBytes();
-
-        await supabase.storage
-            .from('avatars')
-            .uploadBinary(
-              filePath,
-              fileBytes,
-              fileOptions: FileOptions(
-                cacheControl: '3600',
-                upsert: true,
-                contentType: profileImage.mimeType,
-              ),
-            );
-        profileImageUrl = supabase.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
+        profileImageUrl = await _storageService.uploadAvatar(
+          _user.id,
+          profileImage,
+        );
       }
 
       final date = DateFormat(
@@ -199,7 +187,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       ).parseStrict(_birthDateController.text);
 
       final Map<String, dynamic> userUpdates = {
-        'avatar_url': profileImageUrl,
+        if (profileImageUrl != null) 'avatar_url': profileImageUrl,
         'birthDate': date.toIso8601String(),
         'genero': _selectedGenero,
         'full_address': _fullAddressController.text.trim(),
@@ -209,12 +197,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         'status': 'Ativo',
       };
 
-      await supabase.from('usuarios').update(userUpdates).eq('id', _user.id);
-      await supabase.auth.updateUser(
-        UserAttributes(
-          data: {...?_user.userMetadata, 'profile_completed': true},
-        ),
-      );
+      await _authService.updateUserData(_user.id, userUpdates);
 
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/');
@@ -224,8 +207,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar dados: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -242,7 +225,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       appBar: AppBar(
         title: const Text('Complete seu Perfil'),
         automaticallyImplyLeading: false,
+        backgroundColor: Colors.white,
+        elevation: 1,
       ),
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -252,9 +238,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             children: [
               Text(
                 'Olá, ${_user?.userMetadata?['nome'] ?? 'usuário'}!',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
                 ),
               ),
               const Text(
@@ -262,13 +249,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
               const SizedBox(height: 32),
-
               ImageUploadWidget(
                 profileImageNotifier: _profileImageNotifier,
                 imagePicker: _imagePicker,
               ),
               const SizedBox(height: 24),
-
               Autocomplete<String>(
                 initialValue: TextEditingValue(text: _cidadeUFController.text),
                 optionsBuilder: (TextEditingValue textEditingValue) {
@@ -297,6 +282,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                       labelText: 'Cidade e Estado*',
                       hintText: 'Ex: São Paulo, SP',
                       border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.location_city_outlined),
                       suffixIcon: _isLocalLoading
                           ? const Padding(
                               padding: EdgeInsets.all(8.0),
@@ -309,14 +295,26 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 24),
-
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _fullAddressController,
+                decoration: const InputDecoration(
+                  labelText: 'Endereço Completo (Rua, N°, Bairro)*',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.home_outlined),
+                ),
+                validator: (value) => _validateRequired(value, 'Endereço'),
+                autovalidateMode: _autovalidateMode,
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _birthDateController,
                 decoration: InputDecoration(
                   labelText: 'Data de Nascimento*',
                   hintText: 'dd/MM/yyyy',
                   border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.cake_outlined),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.calendar_today),
                     onPressed: () => _selectDate(context),
@@ -326,25 +324,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 validator: _validateBirthDate,
                 autovalidateMode: _autovalidateMode,
               ),
-              const SizedBox(height: 24),
-
-              TextFormField(
-                controller: _fullAddressController,
-                decoration: const InputDecoration(
-                  labelText: 'Endereço Completo (Rua, N°, Bairro)*',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => _validateRequired(value, 'Endereço'),
-                autovalidateMode: _autovalidateMode,
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 24),
-
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 initialValue: _selectedGenero,
                 decoration: const InputDecoration(
                   labelText: 'Gênero*',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.wc_outlined),
                 ),
                 items: _generoOptions.map((String genero) {
                   return DropdownMenuItem<String>(
@@ -361,14 +347,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 autovalidateMode: _autovalidateMode,
               ),
               const SizedBox(height: 32),
-
               _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
                       onPressed: _completeProfile,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.indigo,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
                       child: const Text('Salvar e Concluir'),

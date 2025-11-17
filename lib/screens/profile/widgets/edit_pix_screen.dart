@@ -1,8 +1,7 @@
-// lib/screens/profile/widgets/edit_pix_screen.dart
-
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
+import 'package:careconnect_app/services/caregiver_service.dart';
 import 'package:flutter/material.dart';
-import '../../../main.dart';
 
 class EditPixScreen extends StatefulWidget {
   final CaregiverProfile caregiverProfile;
@@ -21,6 +20,8 @@ class EditPixScreen extends StatefulWidget {
 }
 
 class _EditPixScreenState extends State<EditPixScreen> {
+  final CaregiverService _caregiverService = CaregiverService();
+
   final _formKey = GlobalKey<FormState>();
   final _pixKeyController = TextEditingController();
   String? _selectedKeyType;
@@ -49,7 +50,7 @@ class _EditPixScreenState extends State<EditPixScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Por favor, selecione um tipo de chave.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -58,29 +59,31 @@ class _EditPixScreenState extends State<EditPixScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await supabase
-          .from('cuidadores')
-          .update({
-            'pix_key_type': _selectedKeyType,
-            'pix_key': _pixKeyController.text.trim(),
-          })
-          .eq('id', widget.caregiverProfile.id);
+      final pixData = {
+        'pix_key_type': _selectedKeyType,
+        'pix_key': _pixKeyController.text.trim(),
+      };
+
+      await _caregiverService.updateProfile(
+        widget.caregiverProfile.usuario_id,
+        pixData,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Dados PIX atualizados com sucesso!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.success,
           ),
         );
-        Navigator.pop(context); // Volta para a tela de recebimentos
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -111,10 +114,11 @@ class _EditPixScreenState extends State<EditPixScreen> {
             ),
             const SizedBox(height: 24),
             DropdownButtonFormField<String>(
-              value: _selectedKeyType,
+              initialValue: _selectedKeyType,
               decoration: const InputDecoration(
                 labelText: 'Tipo de Chave PIX',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.vpn_key_outlined),
               ),
               items: _pixKeyTypes.map((String type) {
                 return DropdownMenuItem<String>(value: type, child: Text(type));
@@ -133,6 +137,7 @@ class _EditPixScreenState extends State<EditPixScreen> {
                 labelText: 'Chave PIX',
                 hintText: 'Digite sua chave...',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.pix),
               ),
               validator: (value) =>
                   value!.isEmpty ? 'Insira sua chave PIX' : null,
@@ -142,7 +147,7 @@ class _EditPixScreenState extends State<EditPixScreen> {
               onPressed: _isLoading ? null : _savePixData,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.indigo,
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 textStyle: const TextStyle(
                   fontSize: 16,

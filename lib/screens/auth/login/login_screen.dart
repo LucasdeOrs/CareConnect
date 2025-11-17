@@ -1,9 +1,9 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/screens/auth/reset_password/forgot_password_screen.dart';
+import 'package:careconnect_app/services/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart';
 import '../register_family_screen/register_family_screen.dart';
-import '../../../widgets/logo_widget.dart';
+import '../../../core/widgets/logo_widget.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,13 +13,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final AuthService _authService = AuthService();
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+
   bool _isLoading = false;
-
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
-
   bool _obscurePassword = true;
 
   @override
@@ -38,32 +39,18 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    try {
-      await supabase.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
 
-      // (Nota: a navegação para /home agora é tratada pelo StreamBuilder no main.dart)
-      // Se o StreamBuilder estiver funcionando, esta linha abaixo pode não ser necessária.
-      // if (mounted) {
-      //   Navigator.of(context).pushReplacementNamed('/home');
-      // }
-    } on AuthException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+    try {
+      await _authService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Ocorreu um erro inesperado.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            content: Text(error.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -98,7 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -121,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
                           ),
                         ),
                         const SizedBox(height: 40),
@@ -130,18 +117,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             labelText: 'E-mail',
                             hintText: 'Ex: email@mail.com',
                             border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.email_outlined),
                           ),
                           keyboardType: TextInputType.emailAddress,
                           validator: _validateEmail,
                           autovalidateMode: _autovalidateMode,
                         ),
                         const SizedBox(height: 16),
-                        // 3. CAMPO DE SENHA ATUALIZADO
                         TextFormField(
                           controller: _passwordController,
                           decoration: InputDecoration(
                             labelText: 'Senha',
                             border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -155,14 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               },
                             ),
                           ),
-                          obscureText: _obscurePassword, // Usa a variável
+                          obscureText: _obscurePassword,
                           validator: _validatePassword,
                           autovalidateMode: _autovalidateMode,
                         ),
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            // 4. BOTÃO "ESQUECEU A SENHA" ATUALIZADO
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -172,6 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               );
                             },
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                            ),
                             child: const Text('Esqueceu a senha?'),
                           ),
                         ),
@@ -184,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 16,
                                   ),
-                                  backgroundColor: Colors.indigo,
+                                  backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
                                 ),
                                 child: const Text('Entrar'),
@@ -199,6 +189,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             );
                           },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                          ),
                           child: const Text('Não tem uma conta? Registrar-se'),
                         ),
                       ],

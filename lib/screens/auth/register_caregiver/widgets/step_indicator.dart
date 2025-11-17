@@ -1,3 +1,4 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class StepIndicator extends StatelessWidget {
@@ -33,7 +34,7 @@ class StepIndicator extends StatelessWidget {
     final bool isActive = currentStep == stepIndex;
     final bool isCompleted = currentStep > stepIndex;
     final color = isActive || isCompleted
-        ? Colors.indigo
+        ? AppColors.primary
         : Colors.grey.shade400;
 
     return Column(
@@ -69,7 +70,7 @@ class StepIndicator extends StatelessWidget {
     final bool isCompleted = currentStep > stepIndex;
     return Container(
       height: 2,
-      color: isCompleted ? Colors.indigo : Colors.grey.shade400,
+      color: isCompleted ? AppColors.primary : Colors.grey.shade400,
       margin: const EdgeInsets.only(top: 16.0),
     );
   }

@@ -1,8 +1,9 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart';
-import '../../../widgets/logo_widget.dart';
+import '../../../core/widgets/logo_widget.dart';
 import '../register_caregiver/register_caregiver_screen.dart';
 import '../check_email_screen.dart';
 
@@ -14,6 +15,8 @@ class RegisterFamilyScreen extends StatefulWidget {
 }
 
 class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
+  final AuthService _authService = AuthService();
+
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -110,47 +113,31 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
     final String email = _emailController.text.trim();
 
     try {
-      final AuthResponse res = await supabase.auth.signUp(
+      await _authService.signUpFamily(
         email: email,
         password: _passwordController.text.trim(),
-        data: {
-          'nome': _nameController.text.trim(),
-          'tipo': 'familiar',
-          'phoneNumber': _phoneController.text.trim(),
-          'status': 'PendenteVerificacaoEmail',
-          'profile_completed': false,
-        },
+        nome: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
       );
 
-      final User? user = res.user;
-
-      if ((user != null) || (user == null && res.session == null)) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CheckEmailScreen(email: email),
-            ),
-          );
-        }
-      }
-    } on AuthException catch (error) {
-      if (error.statusCode == '400' &&
-          error.message.contains('User already registered')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Este e-mail já está registrado. Tente fazer login ou recuperar sua senha.',
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CheckEmailScreen(email: email),
           ),
         );
-      } else {
+      }
+    } on AuthException catch (error) {
+      if (mounted) {
+        String message = "Erro no cadastro: ${error.message}";
+        if (error.statusCode == '400' &&
+            error.message.contains('User already registered')) {
+          message =
+              'Este e-mail já está registrado. Tente fazer login ou recuperar sua senha.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Erro no cadastro: ${error.message}"),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text(message), backgroundColor: AppColors.error),
         );
       }
     } catch (error) {
@@ -158,8 +145,8 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ocorreu um erro inesperado: ${error.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            content: Text(error.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -180,7 +167,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Form(
             key: _formKey,
             child: Column(
@@ -189,10 +176,14 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
               children: [
                 const LogoWidget(size: 150),
                 const SizedBox(height: 10),
-                const Text(
+                Text(
                   'Crie sua conta Familiar',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
                 ),
                 const SizedBox(height: 32),
                 TextFormField(
@@ -200,6 +191,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Nome Completo*',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person_outline),
                   ),
                   validator: (value) =>
                       _validateRequired(value, 'Nome Completo'),
@@ -213,6 +205,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                     labelText: 'E-mail*',
                     hintText: 'Ex: usuario@mail.com',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email_outlined),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: _validateEmail,
@@ -225,15 +218,14 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                     labelText: 'Telefone*',
                     hintText: '(##) #####-####',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone_outlined),
                   ),
                   keyboardType: TextInputType.phone,
                   inputFormatters: [_phoneFormatter],
                   validator: _validatePhone,
                   autovalidateMode: _autovalidateMode,
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _passwordController,
                   obscureText: !_isPasswordVisible,
@@ -241,6 +233,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                     labelText: 'Senha*',
                     hintText: 'Mínimo 6 caracteres',
                     border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
@@ -265,6 +258,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                     labelText: 'Confirmar Senha*',
                     hintText: 'Repita a senha',
                     border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isConfirmPasswordVisible
@@ -289,7 +283,7 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                         onPressed: _signUp,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.indigo,
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Registrar'),
@@ -303,6 +297,9 @@ class _RegisterFamilyScreenState extends State<RegisterFamilyScreen> {
                       ),
                     );
                   },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                  ),
                   child: const Text(
                     'É cuidador? Realizar cadastro de cuidador',
                   ),

@@ -1,10 +1,12 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/models/caregiver_profile.dart';
+import 'package:careconnect_app/screens/appointment/appointment_form_modal.dart';
+import 'package:careconnect_app/services/auth_service.dart';
+import 'package:careconnect_app/services/chat_service.dart';
+import 'package:careconnect_app/services/review_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../models/caregiver_profile.dart';
-import '../../appointment/appointment_form_modal.dart';
 import '../../../main.dart';
-import '../../../services/chat_service.dart';
 import '../../chat/chat_screen.dart';
 
 class ExpandableText extends StatefulWidget {
@@ -39,7 +41,7 @@ class _ExpandableTextState extends State<ExpandableText> {
           child: Text(
             expanded ? "ver menos" : "ver mais",
             style: const TextStyle(
-              color: Colors.blue,
+              color: AppColors.primary,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -64,10 +66,19 @@ class CaregiverDetailModal extends StatefulWidget {
 }
 
 class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
+  final AuthService _authService = AuthService();
+  final ReviewService _reviewService = ReviewService();
+
   late final Future<List<Map<String, dynamic>>> _reviewsFuture;
 
+  @override
+  void initState() {
+    super.initState();
+    _reviewsFuture = _reviewService.getReviewsForCaregiver(widget.caregiver.id);
+  }
+
   Future<void> _openChat() async {
-    final currentUser = supabase.auth.currentUser;
+    final currentUser = _authService.currentUser;
     if (currentUser == null) return;
     try {
       final conversaId = await ChatService.startConversation(
@@ -92,37 +103,17 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Não foi possível iniciar o chat: $e'),
-            backgroundColor: Colors.red,
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
           ),
         );
       }
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _reviewsFuture = _fetchReviews();
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchReviews() async {
-    try {
-      final response = await supabase
-          .from('avaliacoes')
-          .select('*, familiar:familiar_id(nome, avatar_url)')
-          .eq('cuidador_id', widget.caregiver.id)
-          .order('created_at', ascending: false);
-      return List<Map<String, dynamic>>.from(response);
-    } catch (e) {
-      debugPrint("Erro ao buscar avaliações: $e");
-      return [];
-    }
-  }
-
   static const Icon _healthIcon = Icon(
     Icons.health_and_safety,
-    color: Colors.blue,
+    color: AppColors.primary,
     size: 20,
   );
 
@@ -130,9 +121,8 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
     if (rawUrl.startsWith('http')) {
       return rawUrl;
     }
-    return Supabase.instance.client.storage
-        .from('cuidadores')
-        .getPublicUrl(rawUrl);
+
+    return supabase.storage.from('cuidadores').getPublicUrl(rawUrl);
   }
 
   Widget _buildHeaderStarRating(double rating, {int reviewCount = 0}) {
@@ -141,7 +131,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       stars.add(
         Icon(
           i <= rating ? Icons.star : Icons.star_border,
-          color: Colors.amber,
+          color: AppColors.warning,
           size: 24,
         ),
       );
@@ -164,7 +154,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       stars.add(
         Icon(
           i <= rating ? Icons.star : Icons.star_border,
-          color: Colors.amber,
+          color: AppColors.warning,
           size: 16,
         ),
       );
@@ -184,7 +174,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.indigo, size: 20),
+          Icon(icon, color: AppColors.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -205,10 +195,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+    final currencyFormat = AppFormatters.currency;
 
     return Column(
       children: [
@@ -293,7 +280,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                             Text(
                               'Profissional formado na área da saúde',
                               style: TextStyle(
-                                color: Colors.blue.shade700,
+                                color: AppColors.primary.shade700,
                                 fontWeight: FontWeight.w500,
                                 fontSize: 14,
                               ),
@@ -301,7 +288,6 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                           ],
                         ),
                       ),
-
                     const SizedBox(height: 8),
                     _buildHeaderStarRating(
                       currentAverage,
@@ -315,9 +301,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                             ?.copyWith(color: Colors.black54),
                       ),
                     ),
-
                     const Divider(height: 40),
-
                     if (widget.caregiver.profissao != null &&
                         widget.caregiver.profissao!.isNotEmpty)
                       _buildInfoRow(
@@ -326,12 +310,10 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                         'Profissão',
                         widget.caregiver.profissao!,
                       ),
-
                     _buildSpecialtiesList(
                       context,
                       widget.caregiver.especialidades,
                     ),
-
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
                       child: Row(
@@ -339,7 +321,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                         children: [
                           const Icon(
                             Icons.work_history,
-                            color: Colors.indigo,
+                            color: AppColors.primary,
                             size: 20,
                           ),
                           const SizedBox(width: 12),
@@ -364,7 +346,6 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                         ],
                       ),
                     ),
-
                     _buildInfoRow(
                       context,
                       Icons.calendar_today,
@@ -390,18 +371,15 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                       'Preço por Hora',
                       currencyFormat.format(widget.caregiver.hourlyRate),
                     ),
-
                     if (widget.caregiver.certificados.isNotEmpty)
                       _buildCertificados(context),
-
                     const Divider(height: 40),
-
                     ElevatedButton.icon(
                       icon: const Icon(Icons.calendar_month),
                       label: const Text('Agendar / Contratar'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: Colors.indigo,
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                       ),
                       onPressed: () {
@@ -419,20 +397,18 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                       },
                     ),
                     const SizedBox(height: 12),
-
                     OutlinedButton.icon(
                       icon: const Icon(Icons.chat_bubble_outline),
                       label: const Text('Entrar em Contato'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
                       ),
                       onPressed: _openChat,
                     ),
-
                     const Divider(height: 40),
-
                     _buildReviewSection(context, reviews),
-
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -534,7 +510,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.person_search, color: Colors.indigo, size: 20),
+          const Icon(Icons.person_search, color: AppColors.primary, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -575,7 +551,11 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.workspace_premium, color: Colors.indigo, size: 20),
+          const Icon(
+            Icons.workspace_premium,
+            color: AppColors.primary,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
