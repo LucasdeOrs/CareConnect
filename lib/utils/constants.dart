@@ -1,0 +1,3 @@
+// URL e Anon Key do Supabase
+const String supabaseUrl = 'https://ddqitsqayiclgmpsygxp.supabase.co';
+const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkcWl0c3FheWljbGdtcHN5Z3hwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjExNDg1NTMsImV4cCI6MjA3NjcyNDU1M30.Nw0ZcxUrG5C6SaEo2_sJVwm5zWQqFc6l-OO95TPjWfc';
