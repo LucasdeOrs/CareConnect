@@ -10,10 +10,10 @@ Aplicação em Flutter para conexão de cuidadores.
 3. Rode a apliação:
    flutter run
 4. Faça login na plataforma:
-   Cuidador:
+   - Cuidador:
      - testcuidador1@email.com
      - 123456
-   Familiar:
+   - Familiar:
      - testfamiliar1@email.com
      - 123456
 * Confirmação de email desabilitada, caso a aplicação trave após a tentativa de login, basta atualizar a pagina *
