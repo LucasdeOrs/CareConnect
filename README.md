@@ -5,6 +5,7 @@ Aplicação em Flutter para conexão de cuidadores.
 ## Como rodar o projeto
 
 1. Clone o repositório.
+   - git clone https://github.com/LucasdeOrs/CareConnect.git
 2. Instale as dependências:
    flutter pub get
 3. Rode a apliação:
