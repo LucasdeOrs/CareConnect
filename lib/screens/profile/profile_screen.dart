@@ -1,6 +1,8 @@
 import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/enums/status_enums.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/screens/auth/reset_password/update_password_screen.dart';
+import 'package:careconnect_app/screens/caregiver_list/caregiver_detail_modal.dart';
 import 'package:careconnect_app/screens/profile/caregiver_screens/edit_professional_profile_screen.dart';
 import 'package:careconnect_app/screens/profile/caregiver_screens/my_schedule_screen.dart';
 import 'package:careconnect_app/screens/profile/caregiver_screens/manage_certificates_screen.dart';
@@ -16,14 +18,7 @@ import '../auth/login/login_screen.dart';
 import 'edit_personal_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  final VoidCallback onClose;
-  final Function(CaregiverProfile) onShowPublicProfile;
-
-  const ProfileScreen({
-    super.key,
-    required this.onClose,
-    required this.onShowPublicProfile,
-  });
+  const ProfileScreen({super.key});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -32,12 +27,13 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
-  late final Future<UserProfileData> _userDataFuture;
+
+  late Future<UserProfileData> _userDataFuture;
 
   @override
   void initState() {
     super.initState();
-    _userDataFuture = _userService.getFullUserProfileAndMaps();
+    _loadUserData();
   }
 
   Future<void> _signOut() async {
@@ -89,61 +85,99 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _loadUserData() {
+    setState(() {
+      _userDataFuture = _userService.getFullUserProfileAndMaps();
+    });
+  }
+
+  Future<void> _navigateTo(Widget screen) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => screen),
+    );
+
+    if (result == true) {
+      _loadUserData();
+    }
+  }
+
+  void _showPublicProfilePreview(CaregiverProfile profile) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => Scaffold(
+        body: SafeArea(
+          child: CaregiverDetailModal(
+            caregiver: profile,
+            onClose: () => Navigator.pop(context),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Em breve!'),
+        backgroundColor: AppColors.primary,
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppColors.error),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: widget.onClose,
-            tooltip: 'Voltar para a Home',
-          ),
-          title: const Text('Meu Perfil'),
-          backgroundColor: Colors.white,
-          elevation: 1,
-          automaticallyImplyLeading: false,
-        ),
-        Expanded(
-          child: FutureBuilder<UserProfileData>(
-            future: _userDataFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text(snapshot.error.toString()));
-              }
-              if (!snapshot.hasData) {
-                return const Center(child: Text('Nenhum dado encontrado.'));
-              }
-
-              final (userModel, caregiverProfile, userDataMap, _) =
-                  snapshot.data!;
-              final userType = userModel.userType?.toDb ?? 'familiar';
-
-              return ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  _buildProfileHeader(userDataMap),
-                  const Divider(height: 1, thickness: 0.5),
-                  if (userType == 'familiar')
-                    ..._buildFamiliarMenu(context, userDataMap)
-                  else
-                    ..._buildCaregiverMenu(
-                      context,
-                      userDataMap,
-                      caregiverProfile,
-                    ),
-                  ..._buildCommonMenu(context),
-                  const Divider(height: 1, thickness: 0.5),
-                  ..._buildLogout(context),
-                ],
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: FutureBuilder<UserProfileData>(
+          future: _userDataFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text('Erro ao carregar perfil: ${snapshot.error}'),
               );
-            },
-          ),
+            }
+            if (!snapshot.hasData) {
+              return const Center(child: Text('Nenhum dado encontrado.'));
+            }
+
+            final (userModel, caregiverProfile, userDataMap, _) =
+                snapshot.data!;
+            final userType = userModel.userType;
+
+            return ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildProfileHeader(userDataMap),
+                const Divider(height: 1, thickness: 0.5),
+
+                if (userType == UserType.familiar)
+                  ..._buildFamiliarMenu(userDataMap),
+
+                if (userType == UserType.cuidador)
+                  ..._buildCaregiverMenu(userDataMap, caregiverProfile),
+
+                ..._buildCommonMenu(),
+
+                const Divider(height: 1, thickness: 0.5),
+                ..._buildLogout(),
+              ],
+            );
+          },
         ),
-      ],
+      ),
     );
   }
 
@@ -154,16 +188,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Container(
       padding: const EdgeInsets.all(24),
-      color: Colors.white,
       child: Row(
         children: [
           CircleAvatar(
             radius: 35,
             backgroundColor: Colors.grey.shade200,
-            backgroundImage: (avatarUrl != null)
-                ? NetworkImage(avatarUrl)
+            backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? NetworkImage(
+                    '$avatarUrl?v=${DateTime.now().millisecondsSinceEpoch}',
+                  )
                 : null,
-            child: (avatarUrl == null)
+            child: (avatarUrl == null || avatarUrl.isEmpty)
                 ? const Icon(Icons.person, size: 35, color: Colors.grey)
                 : null,
           ),
@@ -209,19 +244,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  List<Widget> _buildFamiliarMenu(
-    BuildContext context,
-    Map<String, dynamic> userData,
-  ) {
+  List<Widget> _buildFamiliarMenu(Map<String, dynamic> userData) {
     return [
       _buildSectionTitle('Minha Conta'),
       ListTile(
         leading: const Icon(Icons.person_outline),
         title: const Text('Editar Perfil Pessoal'),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          _navigateTo(EditPersonalProfileScreen(userData: userData));
-        },
+        onTap: () => _navigateTo(EditPersonalProfileScreen(userData: userData)),
       ),
       ListTile(
         leading: const Icon(Icons.people_alt_outlined),
@@ -239,15 +269,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: const Icon(Icons.receipt_long_outlined),
         title: const Text('Histórico de Pagamentos'),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          _navigateTo(const PaymentHistoryScreen());
-        },
+        onTap: () => _navigateTo(const PaymentHistoryScreen()),
       ),
     ];
   }
 
   List<Widget> _buildCaregiverMenu(
-    BuildContext context,
     Map<String, dynamic> userData,
     CaregiverProfile? caregiverProfile,
   ) {
@@ -257,9 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: const Icon(Icons.person_outline),
         title: const Text('Editar Perfil Pessoal'),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          _navigateTo(EditPersonalProfileScreen(userData: userData));
-        },
+        onTap: () => _navigateTo(EditPersonalProfileScreen(userData: userData)),
       ),
       ListTile(
         leading: const Icon(Icons.work_outline),
@@ -271,7 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               EditProfessionalProfileScreen(caregiverProfile: caregiverProfile),
             );
           } else {
-            _showError("Não foi possível carregar seu perfil profissional.");
+            _showError("Perfil profissional incompleto.");
           }
         },
       ),
@@ -283,7 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (caregiverProfile != null) {
             _navigateTo(MinhaAgendaScreen(caregiverProfile: caregiverProfile));
           } else {
-            _showError("Não foi possível carregar seu perfil.");
+            _showError("Perfil profissional incompleto.");
           }
         },
       ),
@@ -297,7 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               MeusRecebimentosScreen(caregiverProfile: caregiverProfile),
             );
           } else {
-            _showError("Não foi possível carregar seu perfil financeiro.");
+            _showError("Perfil profissional incompleto.");
           }
         },
       ),
@@ -311,7 +336,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ManageCertificatesScreen(caregiverProfile: caregiverProfile),
             );
           } else {
-            _showError("Não foi possível carregar seu perfil.");
+            _showError("Perfil profissional incompleto.");
           }
         },
       ),
@@ -321,48 +346,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
           if (caregiverProfile != null) {
-            widget.onShowPublicProfile(caregiverProfile);
+            _showPublicProfilePreview(caregiverProfile);
           } else {
-            _showError("Não foi possível carregar seu perfil público.");
+            _showError("Perfil profissional incompleto.");
           }
         },
       ),
     ];
   }
 
-  List<Widget> _buildCommonMenu(BuildContext context) {
+  List<Widget> _buildCommonMenu() {
     return [
       _buildSectionTitle('Aplicativo'),
       ListTile(
         leading: const Icon(Icons.lock_outline),
-        title: const Text('Segurança (Alterar Senha)'),
+        title: const Text('Segurança'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => _navigateTo(const UpdatePasswordScreen()),
       ),
       ListTile(
-        leading: const Icon(Icons.notifications_none_outlined),
-        title: const Text('Notificações'),
+        leading: const Icon(Icons.settings_outlined),
+        title: const Text('Configurações'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => _navigateTo(const SettingsScreen()),
       ),
       ListTile(
         leading: const Icon(Icons.help_outline),
-        title: const Text('Central de Ajuda (FAQ)'),
+        title: const Text('Ajuda'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => _navigateTo(const HelpCenterScreen()),
       ),
     ];
   }
 
-  List<Widget> _buildLogout(BuildContext context) {
+  List<Widget> _buildLogout() {
     return [
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
         child: TextButton.icon(
-          icon: const Icon(Icons.logout, color: AppColors.error), // Cor
+          icon: const Icon(Icons.logout, color: AppColors.error),
           label: const Text(
             'Sair da Conta',
-            style: TextStyle(color: AppColors.error, fontSize: 16), // Cor
+            style: TextStyle(color: AppColors.error, fontSize: 16),
           ),
           onPressed: _showLogoutDialog,
           style: TextButton.styleFrom(
@@ -375,27 +400,5 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     ];
-  }
-
-  void _navigateTo(Widget screen) {
-    if (!mounted) return;
-    Navigator.push(context, MaterialPageRoute(builder: (context) => screen));
-  }
-
-  void _showComingSoon() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Em breve!'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
-  }
-
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AppColors.error), // Cor
-    );
   }
 }

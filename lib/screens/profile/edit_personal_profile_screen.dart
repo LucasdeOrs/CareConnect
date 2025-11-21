@@ -124,11 +124,7 @@ class _EditPersonalProfileScreenState extends State<EditPersonalProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Editar Perfil Pessoal'),
-        backgroundColor: Colors.white,
-        elevation: 1,
-      ),
+      appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),

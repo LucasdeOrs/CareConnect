@@ -5,6 +5,97 @@ import 'package:intl/intl.dart';
 import '../main.dart';
 
 class AppointmentService {
+  Future<List<AppointmentDetails>> fetchAppointments({
+    required String userId,
+    required String? cuidadorId,
+    required UserType userType,
+    required String filterKey,
+    required Map<String, dynamic> selfUserMap,
+    Map<String, dynamic>? selfCaregiverMap,
+  }) async {
+    DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    dynamic query = supabase.from('agendamentos').select('*');
+
+    if (userType == UserType.cuidador) {
+      if (cuidadorId == null) return [];
+      query = query.eq('cuidador_id', cuidadorId);
+    } else {
+      query = query.eq('familiar_id', userId);
+    }
+
+    if (filterKey == 'todos') {
+      query = query.order('data_agendamento', ascending: false);
+    } else {
+      query = query.order('data_agendamento', ascending: true);
+    }
+
+    final List<dynamic> response = await query;
+    final rawDataList = response.cast<Map<String, dynamic>>();
+
+    final filteredList = rawDataList.where((item) {
+      final status = item['status'];
+
+      if (filterKey == 'pendente_aceite') return status == 'pendente_aceite';
+      if (filterKey == 'aguardando_pagamento') {
+        return status == 'aguardando_pagamento';
+      }
+      if (filterKey == 'confirmado') return status == 'confirmado';
+      if (filterKey == 'concluido') return status == 'concluido';
+      if (filterKey == 'recusado') {
+        return ['recusado', 'cancelado'].contains(status);
+      }
+
+      return true;
+    }).toList();
+
+    final enrichedList = <Map<String, dynamic>>[];
+
+    for (var rawAgendamento in filteredList) {
+      try {
+        if (rawAgendamento['paciente_id'] != null) {
+          final pData = await supabase
+              .from('pacientes')
+              .select()
+              .eq('id', rawAgendamento['paciente_id'])
+              .maybeSingle();
+          rawAgendamento['pacientes'] = pData;
+        }
+
+        if (userType == UserType.cuidador) {
+          final fData = await supabase
+              .from('usuarios')
+              .select('*')
+              .eq('id', rawAgendamento['familiar_id'])
+              .maybeSingle();
+          rawAgendamento['familiar'] = fData;
+        } else {
+          final cData = await supabase
+              .from('cuidadores')
+              .select('*, usuarios(*)')
+              .eq('id', rawAgendamento['cuidador_id'])
+              .maybeSingle();
+          rawAgendamento['cuidador'] = cData;
+        }
+
+        enrichedList.add(rawAgendamento);
+      } catch (e) {
+        debugPrint(
+          'Erro ao enriquecer agendamento ${rawAgendamento['id']}: $e',
+        );
+      }
+    }
+
+    return enrichedList.map((map) {
+      return AppointmentDetails.fromMap(
+        map,
+        userType: userType.toDb,
+        selfUserMap: selfUserMap,
+        selfCaregiverMap: selfCaregiverMap,
+      );
+    }).toList();
+  }
+
   Future<String> createAppointment(Map<String, dynamic> data) async {
     try {
       final response = await supabase
@@ -15,6 +106,17 @@ class AppointmentService {
       return response['id'];
     } catch (e) {
       throw Exception('Erro ao criar agendamento: $e');
+    }
+  }
+
+  Future<void> createMultipleAppointments(
+    List<Map<String, dynamic>> dataList,
+  ) async {
+    if (dataList.isEmpty) return;
+    try {
+      await supabase.from('agendamentos').insert(dataList);
+    } catch (e) {
+      throw Exception('Erro ao criar múltiplos agendamentos: $e');
     }
   }
 
@@ -79,7 +181,10 @@ class AppointmentService {
         final status = item['status'];
         final date = item['data_agendamento'];
 
-        if (filterKey == 'pago') return status == 'pago';
+        if (filterKey == 'pendente_aceite') return status == 'pendente_aceite';
+        if (filterKey == 'aguardando_pagamento') {
+          return status == 'aguardando_pagamento';
+        }
         if (filterKey == 'confirmado') return status == 'confirmado';
         if (filterKey == 'concluido') return status == 'concluido';
         if (filterKey == 'recusado') {

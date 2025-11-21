@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 class CaregiverProfile {
-  String id;
-  // ignore: non_constant_identifier_names
-  String usuario_id;
+  final String id;
+  final String usuario_id;
   final String nome;
   final String? avatarUrl;
   final String? city;
@@ -11,20 +10,22 @@ class CaregiverProfile {
   final List<String> especialidades;
   final double avaliacaoMedia;
   final String availabilityText;
-
   final String? experiencia;
-
   final List<Map<String, String>> certificados;
-
   final int experienceYears;
   final double hourlyRate;
   final String? birthDate;
   final String? profissao;
   final bool formacaoSaude;
 
+  String get location {
+    if (city != null && state != null) return '$city, $state';
+    if (city != null) return city!;
+    return 'Localização não informada';
+  }
+
   CaregiverProfile({
     required this.id,
-    // ignore: non_constant_identifier_names
     required this.usuario_id,
     required this.nome,
     this.avatarUrl,
@@ -44,15 +45,14 @@ class CaregiverProfile {
 
   factory CaregiverProfile.fromSupabase(Map<String, dynamic> data) {
     final usuario = data['usuarios'];
-    if (usuario == null || usuario is! Map<String, dynamic>) {
-      throw Exception('Dados do usuário ausentes ou em formato inválido');
-    }
-
-    final String especialidadesString = data['especialidades'] ?? '';
+    final safeUsuario = (usuario is Map<String, dynamic>)
+        ? usuario
+        : <String, dynamic>{};
+    final String especialidadesString =
+        data['especialidades']?.toString() ?? '';
     final List<String> especialidadesList = especialidadesString.isNotEmpty
         ? especialidadesString.split(',').map((e) => e.trim()).toList()
         : [];
-
     final avaliacao = data['avaliacao_media'];
     double avaliacaoMedia = 0.0;
     if (avaliacao is num) {
@@ -63,7 +63,6 @@ class CaregiverProfile {
 
     final List<Map<String, String>> certsParsed = [];
     final rawCerts = data['certificado_url'];
-
     if (rawCerts is List) {
       for (var item in rawCerts) {
         if (item is Map) {
@@ -78,22 +77,23 @@ class CaregiverProfile {
     }
 
     return CaregiverProfile(
-      id: data['id'] ?? '',
-      usuario_id: usuario['usuario_id'] ?? '',
-      nome: usuario['nome'] ?? 'Nome não informado',
-      avatarUrl: usuario['avatar_url'],
-      city: usuario['city'],
-      state: usuario['state'],
+      id: data['id']?.toString() ?? '',
+      usuario_id:
+          data['usuario_id']?.toString() ?? safeUsuario['id']?.toString() ?? '',
+      nome: safeUsuario['nome']?.toString() ?? 'Nome não informado',
+      avatarUrl: safeUsuario['avatar_url']?.toString(),
+      city: safeUsuario['city']?.toString(),
+      state: safeUsuario['state']?.toString(),
       especialidades: especialidadesList,
       avaliacaoMedia: avaliacaoMedia,
-      availabilityText: data['availability'] ?? 'Disponível',
-      experiencia: data['experiencia'],
+      availabilityText: data['availability']?.toString() ?? 'Disponível',
+      experiencia: data['experiencia']?.toString(),
       certificados: certsParsed,
-      experienceYears: (data['experience_years'] ?? 0) as int,
-      hourlyRate: ((data['hourly_rate'] ?? 0.0) as num).toDouble(),
-      birthDate: usuario['birthDate'],
-      profissao: data['profissao'] as String?,
-      formacaoSaude: (data['formacao_saude'] ?? false) as bool,
+      experienceYears: (data['experience_years'] as num?)?.toInt() ?? 0,
+      hourlyRate: (data['hourly_rate'] as num?)?.toDouble() ?? 0.0,
+      birthDate: safeUsuario['birthDate']?.toString(),
+      profissao: data['profissao']?.toString(),
+      formacaoSaude: data['formacao_saude'] as bool? ?? false,
     );
   }
 

@@ -1,6 +1,7 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
+import 'package:careconnect_app/core/utils/app_formatters.dart';
+import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../../models/caregiver_profile.dart';
 
 class CaregiverCard extends StatelessWidget {
   final CaregiverProfile caregiver;
@@ -14,7 +15,7 @@ class CaregiverCard extends StatelessWidget {
 
   static const Icon _healthIcon = Icon(
     Icons.health_and_safety,
-    color: Colors.blue,
+    color: AppColors.primary,
     size: 16,
   );
 
@@ -24,7 +25,7 @@ class CaregiverCard extends StatelessWidget {
       stars.add(
         Icon(
           i <= rating ? Icons.star : Icons.star_border,
-          color: Colors.amber,
+          color: AppColors.warning,
           size: 18,
         ),
       );
@@ -32,21 +33,16 @@ class CaregiverCard extends StatelessWidget {
     return Row(children: stars);
   }
 
-  Widget _buildInfoChip(
-    BuildContext context,
-    String text,
-    Color iconColor,
-  ) {
+  Widget _buildInfoChip(String text, Color textColor) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(width: 6),
         Text(
           text,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Colors.grey.shade800,
+            color: textColor,
           ),
           overflow: TextOverflow.ellipsis,
         ),
@@ -56,10 +52,7 @@ class CaregiverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(
-      locale: 'pt_BR',
-      symbol: 'R\$',
-    );
+    final currencyFormat = AppFormatters.currency;
 
     return Card(
       elevation: 1,
@@ -68,138 +61,129 @@ class CaregiverCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12.0),
         side: BorderSide(color: Colors.grey.shade200, width: 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  backgroundImage: (caregiver.avatarUrl != null)
-                      ? NetworkImage(caregiver.avatarUrl!)
-                      : null,
-                  child: (caregiver.avatarUrl == null)
-                      ? Icon(
-                          Icons.person,
-                          size: 30,
-                          color: Colors.grey.shade600,
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              caregiver.nome,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
+      child: InkWell(
+        onTap: () => onShowDetails(caregiver),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.grey.shade100,
+                    backgroundImage:
+                        (caregiver.avatarUrl != null &&
+                            caregiver.avatarUrl!.isNotEmpty)
+                        ? NetworkImage(caregiver.avatarUrl!)
+                        : null,
+                    child:
+                        (caregiver.avatarUrl == null ||
+                            caregiver.avatarUrl!.isEmpty)
+                        ? const Icon(Icons.person, size: 30, color: Colors.grey)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                caregiver.nome,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          if (caregiver.formacaoSaude) ...[
-                            const SizedBox(width: 6),
-                            _healthIcon,
+                            if (caregiver.formacaoSaude) ...[
+                              const SizedBox(width: 6),
+                              _healthIcon,
+                            ],
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-
-                      if (caregiver.profissao != null &&
-                          caregiver.profissao!.isNotEmpty)
-                        Text(
-                          caregiver.profissao!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.indigo,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      if (caregiver.profissao == null ||
-                          caregiver.profissao!.isEmpty)
-                        Text(
-                          caregiver.especialidades.join(', '),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black54,
+                        const SizedBox(height: 4),
+                        if (caregiver.profissao != null &&
+                            caregiver.profissao!.isNotEmpty)
+                          Text(
+                            caregiver.profissao!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        else
+                          Text(
+                            caregiver.especialidades.isNotEmpty
+                                ? caregiver.especialidades.join(', ')
+                                : 'Especialidades não informadas',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black54,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
 
-                      const SizedBox(height: 6),
+                        const SizedBox(height: 6),
 
-                      Row(
-                        children: [
-                          _buildStarRating(caregiver.avaliacaoMedia),
-                          const Spacer(),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.location_on_outlined,
-                                size: 14,
-                                color: Colors.grey.shade700,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "${caregiver.city}, ${caregiver.state}",
-                                style: TextStyle(
-                                  fontSize: 13,
+                        Row(
+                          children: [
+                            _buildStarRating(caregiver.avaliacaoMedia),
+                            const Spacer(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
                                   color: Colors.grey.shade700,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+                                const SizedBox(width: 4),
+                                Text(
+                                  caregiver.location,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-
-            const Divider(height: 24, thickness: 0.5),
-
-            Row(
-              children: [
-                _buildInfoChip(
-                  context,
-                  caregiver.availabilityText,
-                  Colors.grey.shade700,
-                ),
-                const Spacer(),
-                _buildInfoChip(
-                  context,
-                  '${currencyFormat.format(caregiver.hourlyRate)}/h',
-                  Colors.green.shade800,
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            FilledButton.tonal(
-              onPressed: () => onShowDetails(caregiver),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 40),
+                ],
               ),
-              child: const Text('Ver Detalhes'),
-            ),
-          ],
+
+              const Divider(height: 24, thickness: 0.5),
+
+              Row(
+                children: [
+                  _buildInfoChip(
+                    caregiver.availabilityText,
+                    Colors.grey.shade700,
+                  ),
+                  const Spacer(),
+                  _buildInfoChip(
+                    '${currencyFormat.format(caregiver.hourlyRate)}/h',
+                    AppColors.success,
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

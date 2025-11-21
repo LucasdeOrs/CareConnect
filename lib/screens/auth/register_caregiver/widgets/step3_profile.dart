@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:careconnect_app/core/constants/app_colors.dart'; // Importa AppColors
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';

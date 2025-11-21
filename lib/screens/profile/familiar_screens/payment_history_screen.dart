@@ -51,7 +51,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       appBar: AppBar(
         title: const Text('Histórico de Pagamentos'),
         backgroundColor: Colors.white,
-        elevation: 1,
+        elevation: 0,
       ),
       backgroundColor: Colors.grey[50],
       body: FutureBuilder<List<Map<String, dynamic>>>(
@@ -101,7 +101,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   caregiverName = usuario['nome'] ?? 'Cuidador';
                 }
               } catch (e) {
-                // Fallback silencioso
+                // ignora
               }
 
               final statusString =

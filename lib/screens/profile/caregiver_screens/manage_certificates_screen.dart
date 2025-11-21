@@ -1,6 +1,6 @@
 import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
-import 'package:careconnect_app/screens/home/widgets/caregiver_detail_modal.dart';
+import 'package:careconnect_app/screens/caregiver_list/caregiver_detail_modal.dart';
 import 'package:careconnect_app/services/certificate_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';

@@ -1,7 +1,8 @@
+import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/screens/auth/complete_profile/complete_caregiver_profile_screen.dart';
 import 'package:careconnect_app/screens/auth/complete_profile/complete_profile_screen.dart';
 import 'package:careconnect_app/screens/auth/reset_password/update_password_screen.dart';
-import 'package:careconnect_app/screens/home/home_screen.dart';
+import 'package:careconnect_app/screens/main_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -34,8 +35,29 @@ class MyApp extends StatelessWidget {
       builder: DevicePreview.appBuilder,
       locale: DevicePreview.locale(context),
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          elevation: 0,
+          iconTheme: IconThemeData(color: Colors.black87),
+          titleTextStyle: TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
       ),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -65,7 +87,7 @@ class MyApp extends StatelessWidget {
             final profileCompleted = metadata?['profile_completed'] ?? false;
 
             if (profileCompleted) {
-              return const HomeScreen();
+              return const MainScreen();
             } else {
               final userType = metadata?['tipo'] ?? 'familiar';
 

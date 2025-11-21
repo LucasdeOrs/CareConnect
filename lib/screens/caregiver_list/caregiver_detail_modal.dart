@@ -2,12 +2,12 @@ import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/core/utils/app_formatters.dart';
 import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/screens/appointment/appointment_form_modal.dart';
+import 'package:careconnect_app/screens/chat/chat_screen.dart';
 import 'package:careconnect_app/services/auth_service.dart';
 import 'package:careconnect_app/services/chat_service.dart';
 import 'package:careconnect_app/services/review_service.dart';
 import 'package:flutter/material.dart';
 import '../../../main.dart';
-import '../../chat/chat_screen.dart';
 
 class ExpandableText extends StatefulWidget {
   final String text;
@@ -70,11 +70,23 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
   final ReviewService _reviewService = ReviewService();
 
   late final Future<List<Map<String, dynamic>>> _reviewsFuture;
+  bool _isViewerCaregiver = false;
 
   @override
   void initState() {
     super.initState();
     _reviewsFuture = _reviewService.getReviewsForCaregiver(widget.caregiver.id);
+    _checkViewerType();
+  }
+
+  void _checkViewerType() {
+    final user = _authService.currentUser;
+    if (user != null) {
+      final tipo = user.userMetadata?['tipo'];
+      setState(() {
+        _isViewerCaregiver = (tipo == 'cuidador');
+      });
+    }
   }
 
   Future<void> _openChat() async {
@@ -374,29 +386,34 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                     if (widget.caregiver.certificados.isNotEmpty)
                       _buildCertificados(context),
                     const Divider(height: 40),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.calendar_month),
-                      label: const Text('Agendar / Contratar'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(20),
+
+                    if (!_isViewerCaregiver)
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.calendar_month),
+                        label: const Text('Agendar / Contratar'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
                             ),
-                          ),
-                          builder: (context) =>
-                              AppointmentFormModal(caregiver: widget.caregiver),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
+                            builder: (context) => AppointmentFormModal(
+                              caregiver: widget.caregiver,
+                            ),
+                          );
+                        },
+                      ),
+
+                    SizedBox(height: _isViewerCaregiver ? 0 : 12),
+
                     OutlinedButton.icon(
                       icon: const Icon(Icons.chat_bubble_outline),
                       label: const Text('Entrar em Contato'),
@@ -449,6 +466,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
     );
   }
 
+  // ignore: non_constant_identifier_names
   Widget _ReviewCommentCard({required Map<String, dynamic> reviewData}) {
     final familiar = reviewData['familiar'] as Map<String, dynamic>? ?? {};
     final nomeFamiliar = familiar['nome'] ?? 'Usuário';

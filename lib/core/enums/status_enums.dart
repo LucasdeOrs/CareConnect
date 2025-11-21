@@ -11,12 +11,13 @@ enum UserType {
 }
 
 enum AppointmentStatus {
+  pendenteAceite('pendente_aceite', 'Aguardando Aceite', Colors.orange),
   aguardandoPagamento(
     'aguardando_pagamento',
     'Aguardando Pagamento',
-    Colors.orange,
+    Colors.deepOrange,
   ),
-  pago('pago', 'Aguardando Aceite', Colors.orange),
+  pago('pago', 'Aprovado/Pago', Colors.lightBlue),
   confirmado('confirmado', 'Confirmado', Colors.blue),
   concluido('concluido', 'Concluído', Colors.green),
   recusado('recusado', 'Recusado', Colors.red),
@@ -31,7 +32,7 @@ enum AppointmentStatus {
   static AppointmentStatus fromString(String value) {
     return AppointmentStatus.values.firstWhere(
       (e) => e.dbValue == value,
-      orElse: () => AppointmentStatus.aguardandoPagamento,
+      orElse: () => AppointmentStatus.pendenteAceite,
     );
   }
 }

@@ -102,7 +102,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('Notificações'),
         backgroundColor: Colors.white,
-        elevation: 1,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.done_all),

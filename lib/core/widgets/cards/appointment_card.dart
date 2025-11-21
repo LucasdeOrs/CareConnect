@@ -313,7 +313,7 @@ class AppointmentCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Recusar Agendamento'),
-        content: const Text('Deseja recusar? O familiar será reembolsado.'),
+        content: const Text('Deseja recusar? O familiar será notificado.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -340,7 +340,9 @@ class AppointmentCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancelar Aceite'),
-        content: const Text('Deseja cancelar? O valor será estornado.'),
+        content: const Text(
+          'Deseja cancelar? Se o pagamento foi efetuado, o valor será estornado.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -367,7 +369,9 @@ class AppointmentCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirmar Cancelamento'),
-        content: const Text('Deseja cancelar? Você será reembolsado.'),
+        content: const Text(
+          'Deseja cancelar? Se o pagamento foi efetuado, você será reembolsado.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -439,42 +443,47 @@ class AppointmentCard extends StatelessWidget {
       now.add(const Duration(hours: 1)),
     );
 
+    final bool isServiceActive =
+        agendamento.status == AppointmentStatus.pago ||
+        agendamento.status == AppointmentStatus.confirmado;
+
+    final bool isCaregiverReadyToFinalize =
+        (userType == 'cuidador' && isServiceActive && isServiceDayOrLater);
+
     final bool isFamiliarPendingPayment =
         (userType == 'familiar' &&
         agendamento.status == AppointmentStatus.aguardandoPagamento);
+
     final bool isCaregiverPending =
         (userType == 'cuidador' &&
-        agendamento.status == AppointmentStatus.pago);
-    final bool isCaregiverConfirmed =
-        (userType == 'cuidador' &&
-        agendamento.status == AppointmentStatus.confirmado &&
-        isServiceDayOrLater);
+        agendamento.status == AppointmentStatus.pendenteAceite);
+
     final bool isCaregiverCanCancelAcceptance =
-        (userType == 'cuidador' &&
-        agendamento.status == AppointmentStatus.confirmado &&
-        !isServiceDayOrLater);
-    final bool isFamiliarShowCode =
-        (userType == 'familiar' &&
-        (agendamento.status == AppointmentStatus.pago ||
-            agendamento.status == AppointmentStatus.confirmado));
+        (userType == 'cuidador' && isServiceActive && !isServiceDayOrLater);
+
+    final bool isFamiliarShowCode = (userType == 'familiar' && isServiceActive);
+
     final bool isFamiliarCanCancel =
         (userType == 'familiar' &&
-        (agendamento.status == AppointmentStatus.aguardandoPagamento ||
-            agendamento.status == AppointmentStatus.pago ||
-            agendamento.status == AppointmentStatus.confirmado) &&
+        (isServiceActive ||
+            agendamento.status == AppointmentStatus.aguardandoPagamento ||
+            agendamento.status == AppointmentStatus.pendenteAceite) &&
         canCancelTimeLimit);
+
     final bool isFinished =
         (agendamento.status == AppointmentStatus.concluido ||
         agendamento.status == AppointmentStatus.recusado ||
         agendamento.status == AppointmentStatus.cancelado);
+
     final bool isFamiliarCanReview =
         (userType == 'familiar' &&
         agendamento.status == AppointmentStatus.concluido &&
         !agendamento.avaliado);
+
     final bool isFamiliarCanChangePatient =
         (userType == 'familiar' &&
         (agendamento.status == AppointmentStatus.aguardandoPagamento ||
-            agendamento.status == AppointmentStatus.pago));
+            agendamento.status == AppointmentStatus.pendenteAceite));
 
     return Card(
       elevation: 1,
@@ -522,7 +531,10 @@ class AppointmentCard extends StatelessWidget {
             _buildStatusAndPrice(context, currencyFormat),
 
             if (isCaregiverPending) _buildCaregiverActions(context),
-            if (isCaregiverConfirmed) _buildFinalizeServiceButton(context),
+
+            if (isCaregiverReadyToFinalize)
+              _buildFinalizeServiceButton(context),
+
             if (isCaregiverCanCancelAcceptance)
               _buildCaregiverCancelAcceptanceButton(context),
             if (isFamiliarShowCode) _buildConfirmationCode(context, isFinished),
@@ -772,7 +784,8 @@ class AppointmentCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton(
-              onPressed: () => onUpdateStatus('confirmado'),
+              onPressed: () =>
+                  onUpdateStatus(AppointmentStatus.aguardandoPagamento.dbValue),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.success.shade700,
                 foregroundColor: Colors.white,

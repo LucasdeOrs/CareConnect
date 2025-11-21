@@ -107,7 +107,7 @@ class _MyPatientsScreenState extends State<MyPatientsScreen> {
       appBar: AppBar(
         title: const Text('Meus Pacientes'),
         backgroundColor: Colors.white,
-        elevation: 1,
+        elevation: 0,
       ),
       backgroundColor: Colors.grey[50],
       floatingActionButton: FloatingActionButton(
