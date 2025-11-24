@@ -60,7 +60,6 @@ class AppointmentDetails {
     UserModel cuidadorObj;
     Map<String, dynamic>? cuidadorJoinData;
 
-    // Lógica de conversão usando UserModel.simple ou fromJson
     if (userType == 'familiar') {
       familiarObj = UserModel.fromJson(selfUserMap);
       final cuidadorJoin = map['cuidador'];
@@ -89,10 +88,7 @@ class AppointmentDetails {
       horaFim: _timeFromStr(map['hora_fim']),
       enderecoLocal: map['endereco_local'] ?? 'Endereço não informado',
       valorTotal: (map['valor_total'] as num).toDouble(),
-
-      // Conversão do Enum aqui
       status: AppointmentStatus.fromString(map['status'] ?? ''),
-
       codigoConfirmacao: map['codigo_confirmacao'] ?? '---',
       avaliado: map['avaliado'] ?? false,
       familiar: familiarObj,

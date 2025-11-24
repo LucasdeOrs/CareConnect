@@ -34,18 +34,24 @@ class SearchScreenState extends State<SearchScreen>
   int _currentPage = 0;
   final int _pageSize = 10;
 
+  // Filtros Básicos
   String _sortOrder = 'rating_desc';
   String _sortLabel = 'Melhores Avaliados';
-
   bool _onlyHealthPro = false;
-
   String _selectedDaysKey = 'todos';
   String _daysLabel = 'Todos os Dias';
-
   String _selectedTimeKey = 'qualquer';
   String _timeLabel = 'Qualquer Horário';
-
   RangeValues _priceRange = const RangeValues(0, 500);
+
+  // NOVOS FILTROS (Booleanos)
+  bool _filterFumante = false; // true = quero NÃO fumante
+  bool _filterCnh = false;
+  bool _filterCarro = false;
+  bool _filterPets = false;
+  bool _filterCozinha = false;
+  bool _filterLimpeza = false;
+  bool _filterDormir = false;
 
   // ignore: unused_field
   List<String> _todasCidadesComUF = [];
@@ -69,38 +75,81 @@ class SearchScreenState extends State<SearchScreen>
 
   void applyFilters({
     String? searchText,
-    bool? onlyHealthPro,
     String? timeKey,
     String? sortOrder,
+    bool? onlyHealthPro,
+    bool? possuiCarro,
+    bool? cozinha,
+    bool? limpeza,
+    bool? dormirLocal,
+    bool? gostaAnimais,
   }) {
     setState(() {
+      _currentPage = 0;
+      _caregivers.clear();
+      _hasMore = true;
+      _isLoading = true;
+
       if (searchText != null) {
         _searchController.text = searchText;
-        if (onlyHealthPro == null) _onlyHealthPro = false;
-        if (timeKey == null) {
-          _selectedTimeKey = 'qualquer';
-          _timeLabel = 'Qualquer Horário';
-        }
       }
 
       if (onlyHealthPro != null) _onlyHealthPro = onlyHealthPro;
 
       if (timeKey != null) {
         _selectedTimeKey = timeKey;
-        if (timeKey == 'noite') _timeLabel = 'Noite';
+        if (timeKey == 'noite') {
+          _timeLabel = 'Noite';
+        } else if (timeKey == 'qualquer') {
+          _timeLabel = 'Qualquer Horário';
+        }
       }
 
       if (sortOrder != null) {
         _sortOrder = sortOrder;
         if (sortOrder == 'rating_desc') _sortLabel = 'Melhores Avaliados';
       }
-      _currentPage = 0;
-      _caregivers.clear();
-      _hasMore = true;
-      _isLoading = true;
+
+      if (possuiCarro != null) {
+        _clearExtraFilters();
+        _filterCarro = possuiCarro;
+      }
+      if (cozinha != null) {
+        _clearExtraFilters();
+        _filterCozinha = cozinha;
+      }
+      if (limpeza != null) {
+        _clearExtraFilters();
+        _filterLimpeza = limpeza;
+      }
+      if (dormirLocal != null) {
+        _clearExtraFilters();
+        _filterDormir = dormirLocal;
+      }
+      if (gostaAnimais != null) {
+        _clearExtraFilters();
+        _filterPets = gostaAnimais;
+      }
     });
 
     _fetchCaregivers();
+  }
+
+  void _clearExtraFilters() {
+    _filterFumante = false;
+    _filterCnh = false;
+    _filterCarro = false;
+    _filterPets = false;
+    _filterCozinha = false;
+    _filterLimpeza = false;
+    _filterDormir = false;
+  }
+
+  void _resetPagination() {
+    _currentPage = 0;
+    _caregivers.clear();
+    _hasMore = true;
+    _isLoading = true;
   }
 
   @override
@@ -124,10 +173,7 @@ class SearchScreenState extends State<SearchScreen>
   Future<void> _loadInitialData() async {
     if (!mounted) return;
     setState(() {
-      _currentPage = 0;
-      _caregivers.clear();
-      _hasMore = true;
-      _isLoading = true;
+      _resetPagination();
     });
     await _fetchCaregivers();
   }
@@ -167,6 +213,13 @@ class SearchScreenState extends State<SearchScreen>
         sortOrder: _sortOrder,
         limit: _pageSize,
         offset: _currentPage * _pageSize,
+        fumante: _filterFumante ? false : null,
+        habilitaCnh: _filterCnh ? true : null,
+        possuiCarro: _filterCarro ? true : null,
+        gostaAnimais: _filterPets ? true : null,
+        cozinha: _filterCozinha ? true : null,
+        limpeza: _filterLimpeza ? true : null,
+        dormirLocal: _filterDormir ? true : null,
       );
 
       if (mounted) {
@@ -216,6 +269,15 @@ class SearchScreenState extends State<SearchScreen>
       _timeLabel = 'Qualquer Horário';
       _sortOrder = 'rating_desc';
       _sortLabel = 'Melhores Avaliados';
+
+      // Limpa extras
+      _filterFumante = false;
+      _filterCnh = false;
+      _filterCarro = false;
+      _filterPets = false;
+      _filterCozinha = false;
+      _filterLimpeza = false;
+      _filterDormir = false;
     });
     _loadInitialData();
   }
@@ -390,6 +452,156 @@ class SearchScreenState extends State<SearchScreen>
     _loadInitialData();
   }
 
+  // NOVO: Modal para filtros extras (estilo iFood/Airbnb)
+  void _showMoreFiltersOptions() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(16.0),
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filtros Avançados',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        const Text(
+                          "Qualificações & Logística",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        _buildSwitchTileModal(
+                          "Não Fumante",
+                          "Mostrar apenas não fumantes",
+                          _filterFumante,
+                          (val) => setModalState(() => _filterFumante = val),
+                        ),
+                        _buildSwitchTileModal(
+                          "Possui CNH",
+                          "Carteira de Habilitação válida",
+                          _filterCnh,
+                          (val) => setModalState(() => _filterCnh = val),
+                        ),
+                        _buildSwitchTileModal(
+                          "Carro Próprio",
+                          "Possui veículo para transporte",
+                          _filterCarro,
+                          (val) => setModalState(() => _filterCarro = val),
+                        ),
+                        const Divider(),
+                        const Text(
+                          "Tarefas Aceitas",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        _buildSwitchTileModal(
+                          "Cozinha",
+                          "Prepara refeições para o paciente",
+                          _filterCozinha,
+                          (val) => setModalState(() => _filterCozinha = val),
+                        ),
+                        _buildSwitchTileModal(
+                          "Limpeza Leve",
+                          "Mantém o ambiente do paciente limpo",
+                          _filterLimpeza,
+                          (val) => setModalState(() => _filterLimpeza = val),
+                        ),
+                        _buildSwitchTileModal(
+                          "Dorme no Local",
+                          "Disponível para pernoite/dormir",
+                          _filterDormir,
+                          (val) => setModalState(() => _filterDormir = val),
+                        ),
+                        const Divider(),
+                        const Text(
+                          "Preferências",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        _buildSwitchTileModal(
+                          "Gosta de Pets",
+                          "Sente-se confortável com animais",
+                          _filterPets,
+                          (val) => setModalState(() => _filterPets = val),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Aplica os filtros e recarrega
+                        _loadInitialData();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text("Aplicar Filtros"),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSwitchTileModal(
+    String title,
+    String subtitle,
+    bool value,
+    Function(bool) onChanged,
+  ) {
+    return SwitchListTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      value: value,
+      activeColor: AppColors.primary,
+      onChanged: onChanged,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
   Widget _buildFilterOptionTile(
     String title,
     bool isSelected,
@@ -454,6 +666,17 @@ class SearchScreenState extends State<SearchScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    // Verifica se tem algum filtro extra ativo para pintar o botão
+    bool hasExtraFilters =
+        _filterFumante ||
+        _filterCnh ||
+        _filterCarro ||
+        _filterPets ||
+        _filterCozinha ||
+        _filterLimpeza ||
+        _filterDormir;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -497,6 +720,31 @@ class SearchScreenState extends State<SearchScreen>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
+                  // CHIP DE FILTROS EXTRAS (NOVO)
+                  ActionChip(
+                    avatar: hasExtraFilters
+                        ? const CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            radius: 4,
+                          )
+                        : const Icon(Icons.tune, size: 16),
+                    label: const Text("Filtros"),
+                    onPressed: _showMoreFiltersOptions,
+                    backgroundColor: hasExtraFilters
+                        // ignore: deprecated_member_use
+                        ? AppColors.primary.withOpacity(0.1)
+                        : Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: hasExtraFilters
+                            ? AppColors.primary
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
                   _buildFilterChip(
                     label: _sortLabel,
                     icon: Icons.keyboard_arrow_down,

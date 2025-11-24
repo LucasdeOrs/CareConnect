@@ -17,6 +17,13 @@ class CaregiverProfile {
   final String? birthDate;
   final String? profissao;
   final bool formacaoSaude;
+  final bool fumante;
+  final bool habilitaCnh;
+  final bool possuiCarro;
+  final bool gostaAnimais;
+  final bool cozinha;
+  final bool limpeza;
+  final bool dormirLocal;
 
   String get location {
     if (city != null && state != null) return '$city, $state';
@@ -41,6 +48,13 @@ class CaregiverProfile {
     this.birthDate,
     this.profissao,
     this.formacaoSaude = false,
+    this.fumante = false,
+    this.habilitaCnh = false,
+    this.possuiCarro = false,
+    this.gostaAnimais = false,
+    this.cozinha = false,
+    this.limpeza = false,
+    this.dormirLocal = false,
   });
 
   factory CaregiverProfile.fromSupabase(Map<String, dynamic> data) {
@@ -48,11 +62,13 @@ class CaregiverProfile {
     final safeUsuario = (usuario is Map<String, dynamic>)
         ? usuario
         : <String, dynamic>{};
+
     final String especialidadesString =
         data['especialidades']?.toString() ?? '';
     final List<String> especialidadesList = especialidadesString.isNotEmpty
         ? especialidadesString.split(',').map((e) => e.trim()).toList()
         : [];
+
     final avaliacao = data['avaliacao_media'];
     double avaliacaoMedia = 0.0;
     if (avaliacao is num) {
@@ -94,6 +110,13 @@ class CaregiverProfile {
       birthDate: safeUsuario['birthDate']?.toString(),
       profissao: data['profissao']?.toString(),
       formacaoSaude: data['formacao_saude'] as bool? ?? false,
+      fumante: data['fumante'] as bool? ?? false,
+      habilitaCnh: data['habilita_cnh'] as bool? ?? false,
+      possuiCarro: data['possui_carro'] as bool? ?? false,
+      gostaAnimais: data['gosta_animais'] as bool? ?? false,
+      cozinha: data['cozinha'] as bool? ?? false,
+      limpeza: data['limpeza'] as bool? ?? false,
+      dormirLocal: data['dormir_local'] as bool? ?? false,
     );
   }
 

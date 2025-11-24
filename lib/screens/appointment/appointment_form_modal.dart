@@ -607,7 +607,6 @@ class _AppointmentFormModalState extends State<AppointmentFormModal> {
       decoration: const InputDecoration(
         labelText: 'Tipo de Serviço',
         border: OutlineInputBorder(),
-        prefixIcon: Icon(Icons.medical_services_outlined),
       ),
       items: _serviceTypes.map((type) {
         return DropdownMenuItem(value: type, child: Text(type));

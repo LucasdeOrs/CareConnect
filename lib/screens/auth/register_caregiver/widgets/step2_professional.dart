@@ -17,6 +17,13 @@ class Step2Professional extends StatefulWidget {
   final TextEditingController hourlyRateController;
   final ValueNotifier<String?> availabilityDaysNotifier;
   final ValueNotifier<String?> availabilityTimeNotifier;
+  final ValueNotifier<bool> fumanteNotifier;
+  final ValueNotifier<bool> cnhNotifier;
+  final ValueNotifier<bool> carroNotifier;
+  final ValueNotifier<bool> petsNotifier;
+  final ValueNotifier<bool> cozinhaNotifier;
+  final ValueNotifier<bool> limpaNotifier;
+  final ValueNotifier<bool> dormeLocalNotifier;
 
   const Step2Professional({
     super.key,
@@ -31,6 +38,13 @@ class Step2Professional extends StatefulWidget {
     required this.hourlyRateController,
     required this.availabilityDaysNotifier,
     required this.availabilityTimeNotifier,
+    required this.fumanteNotifier,
+    required this.cnhNotifier,
+    required this.carroNotifier,
+    required this.petsNotifier,
+    required this.cozinhaNotifier,
+    required this.limpaNotifier,
+    required this.dormeLocalNotifier,
   });
 
   @override
@@ -94,6 +108,31 @@ class _Step2ProfessionalState extends State<Step2Professional> {
     }
   }
 
+  Widget _buildSwitchTile(
+    String title,
+    String subtitle,
+    ValueNotifier<bool> notifier,
+    IconData icon,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: notifier,
+      builder: (context, value, _) {
+        return SwitchListTile(
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+          ),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+          value: value,
+          onChanged: (val) => notifier.value = val,
+          secondary: Icon(icon, color: AppColors.primary),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -130,6 +169,54 @@ class _Step2ProfessionalState extends State<Step2Professional> {
             textCapitalization: TextCapitalization.sentences,
           ),
           const SizedBox(height: 16),
+
+          const Text(
+            "Informações Adicionais",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          _buildSwitchTile(
+            "Fumante",
+            "Você fuma?",
+            widget.fumanteNotifier,
+            Icons.smoking_rooms,
+          ),
+          _buildSwitchTile(
+            "CNH",
+            "Possui habilitação?",
+            widget.cnhNotifier,
+            Icons.directions_car,
+          ),
+          _buildSwitchTile(
+            "Veículo Próprio",
+            "Possui carro?",
+            widget.carroNotifier,
+            Icons.car_rental,
+          ),
+          _buildSwitchTile(
+            "Gosta de Animais",
+            "Confortável com pets?",
+            widget.petsNotifier,
+            Icons.pets,
+          ),
+          _buildSwitchTile(
+            "Cozinha",
+            "Consegue preparar refeições?",
+            widget.cozinhaNotifier,
+            Icons.soup_kitchen,
+          ),
+          _buildSwitchTile(
+            "Dorme no Local",
+            "Disponivel para dormir no local do serviço?",
+            widget.dormeLocalNotifier,
+            Icons.bedtime,
+          ),
+          _buildSwitchTile(
+            "Limpeza Leve",
+            "Consegue manter o local do serviço limpo?",
+            widget.limpaNotifier,
+            Icons.cleaning_services,
+          ),
+          const Divider(),
 
           ValueListenableBuilder<bool>(
             valueListenable: widget.formacaoSaudeNotifier,

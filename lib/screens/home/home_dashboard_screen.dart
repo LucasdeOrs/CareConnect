@@ -12,8 +12,19 @@ import 'package:careconnect_app/services/notification_service.dart';
 import 'package:flutter/material.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
-  final Function({String? query, bool? healthPro, String? time, String? sort})?
+  final Function({
+    String? query,
+    bool? healthPro,
+    String? time,
+    String? sort,
+    bool? possuiCarro,
+    bool? cozinha,
+    bool? limpeza,
+    bool? dormirLocal,
+    bool? gostaAnimais,
+  })?
   onSearchCategory;
+
   final Function(int index)? onTabChange;
 
   const HomeDashboardScreen({
@@ -124,20 +135,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       case 'Enfermeiro':
         widget.onSearchCategory?.call(query: 'Enfermeiro', healthPro: true);
         break;
-      case 'Pós-Cirúrgico':
-        widget.onSearchCategory?.call(query: 'Pós-Cirúrgico');
+      case 'Com Carro':
+        widget.onSearchCategory?.call(possuiCarro: true);
         break;
-      case 'Companhia':
-        widget.onSearchCategory?.call(query: 'Companhia');
+      case 'Dorme no Local':
+        widget.onSearchCategory?.call(dormirLocal: true);
         break;
-      case 'Pernoite':
-        widget.onSearchCategory?.call(time: 'noite');
+      case 'Cozinha':
+        widget.onSearchCategory?.call(cozinha: true);
         break;
-      case 'Higiene':
-        widget.onSearchCategory?.call(query: 'Higiene e Conforto');
+      case 'Limpeza':
+        widget.onSearchCategory?.call(limpeza: true);
         break;
-      case 'Remédios':
-        widget.onSearchCategory?.call(query: 'Administração de Medicamentos');
+      case 'Pet Friendly':
+        widget.onSearchCategory?.call(gostaAnimais: true);
         break;
       case 'Agenda':
         widget.onTabChange?.call(2);
@@ -293,7 +304,6 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -312,25 +322,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               );
             }),
           ),
-
           const SizedBox(height: 24),
-
           const Text(
             'Categorias',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-
           _buildCategoryGrid(),
-
           const SizedBox(height: 24),
-
           const Text(
             'Destaques da Semana',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-
           SizedBox(
             height: 210,
             child: FutureBuilder<List<CaregiverProfile>>(
@@ -531,18 +535,37 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         'label': 'Enfermeiro',
         'color': Colors.blue,
       },
-      {'icon': Icons.healing, 'label': 'Pós-Cirúrgico', 'color': Colors.green},
       {
-        'icon': Icons.volunteer_activism,
-        'label': 'Companhia',
-        'color': Colors.red,
+        'icon': Icons.bedtime,
+        'label': 'Dorme no Local',
+        'color': Colors.indigo,
       },
-      {'icon': Icons.bed, 'label': 'Pernoite', 'color': Colors.purple},
-      {'icon': Icons.clean_hands, 'label': 'Higiene', 'color': Colors.teal},
-      {'icon': Icons.medication, 'label': 'Remédios', 'color': Colors.pink},
+      {
+        'icon': Icons.directions_car,
+        'label': 'Com Carro',
+        'color': Colors.green,
+      },
+      {'icon': Icons.soup_kitchen, 'label': 'Cozinha', 'color': Colors.red},
+      {
+        'icon': Icons.cleaning_services,
+        'label': 'Limpeza',
+        'color': Colors.teal,
+      },
+      {'icon': Icons.pets, 'label': 'Pet Friendly', 'color': Colors.brown},
     ];
 
     final List<Map<String, dynamic>> expandedItems = [];
+
+    expandedItems.add({
+      'icon': Icons.healing,
+      'label': 'Pós-Cirúrgico',
+      'color': Colors.greenAccent,
+    });
+    expandedItems.add({
+      'icon': Icons.volunteer_activism,
+      'label': 'Companhia',
+      'color': Colors.pinkAccent,
+    });
 
     expandedItems.add({
       'icon': Icons.calendar_month,

@@ -89,6 +89,73 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
     }
   }
 
+  Widget _buildExtraInfoChips() {
+    final features = [
+      if (widget.caregiver.habilitaCnh)
+        {'icon': Icons.directions_car, 'label': 'CNH', 'color': Colors.blue},
+      if (widget.caregiver.possuiCarro)
+        {
+          'icon': Icons.car_rental,
+          'label': 'Carro Próprio',
+          'color': Colors.blue,
+        },
+      if (widget.caregiver.dormirLocal)
+        {
+          'icon': Icons.bedtime,
+          'label': 'Dorme no Local',
+          'color': Colors.indigo,
+        },
+      if (widget.caregiver.cozinha)
+        {
+          'icon': Icons.soup_kitchen,
+          'label': 'Cozinha',
+          'color': Colors.orange,
+        },
+      if (widget.caregiver.limpeza)
+        {
+          'icon': Icons.cleaning_services,
+          'label': 'Limpeza Leve',
+          'color': Colors.teal,
+        },
+
+      if (!widget.caregiver.fumante)
+        {
+          'icon': Icons.smoke_free,
+          'label': 'Não Fumante',
+          'color': Colors.green,
+        },
+      if (widget.caregiver.gostaAnimais)
+        {'icon': Icons.pets, 'label': 'Gosta de Pets', 'color': Colors.brown},
+    ];
+
+    if (features.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12.0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: features.map((f) {
+          return Chip(
+            avatar: Icon(f['icon'] as IconData, size: 16, color: Colors.white),
+            label: Text(
+              f['label'] as String,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            backgroundColor: f['color'] as Color,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            side: BorderSide.none,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Future<void> _openChat() async {
     final currentUser = _authService.currentUser;
     if (currentUser == null) return;
@@ -383,6 +450,7 @@ class _CaregiverDetailModalState extends State<CaregiverDetailModal> {
                       'Preço por Hora',
                       currencyFormat.format(widget.caregiver.hourlyRate),
                     ),
+                    _buildExtraInfoChips(),
                     if (widget.caregiver.certificados.isNotEmpty)
                       _buildCertificados(context),
                     const Divider(height: 40),

@@ -26,11 +26,11 @@ class CaregiverCard extends StatelessWidget {
         Icon(
           i <= rating ? Icons.star : Icons.star_border,
           color: AppColors.warning,
-          size: 18,
+          size: 16,
         ),
       );
     }
-    return Row(children: stars);
+    return Row(mainAxisSize: MainAxisSize.min, children: stars);
   }
 
   Widget _buildInfoChip(String text, Color textColor) {
@@ -40,8 +40,8 @@ class CaregiverCard extends StatelessWidget {
         Text(
           text,
           style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
             color: textColor,
           ),
           overflow: TextOverflow.ellipsis,
@@ -50,139 +50,237 @@ class CaregiverCard extends StatelessWidget {
     );
   }
 
+  Widget _buildFeatureBadge(IconData icon, String label) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.grey.shade700),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturesRow() {
+    final features = <Widget>[];
+
+    if (caregiver.possuiCarro) {
+      features.add(_buildFeatureBadge(Icons.directions_car, 'Carro'));
+    } else if (caregiver.habilitaCnh) {
+      features.add(_buildFeatureBadge(Icons.credit_card, 'CNH'));
+    }
+
+    if (caregiver.dormirLocal) {
+      features.add(_buildFeatureBadge(Icons.bedtime, 'Dorme'));
+    }
+
+    if (caregiver.cozinha) {
+      features.add(_buildFeatureBadge(Icons.soup_kitchen, 'Cozinha'));
+    }
+
+    if (features.isEmpty && !caregiver.fumante) {
+      features.add(_buildFeatureBadge(Icons.smoke_free, 'Não Fuma'));
+    }
+
+    if (features.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Wrap(runSpacing: 4, children: features.take(3).toList()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currencyFormat = AppFormatters.currency;
 
-    return Card(
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        side: BorderSide(color: Colors.grey.shade200, width: 1),
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            // ignore: deprecated_member_use
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: () => onShowDetails(caregiver),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.grey.shade100,
-                    backgroundImage:
-                        (caregiver.avatarUrl != null &&
-                            caregiver.avatarUrl!.isNotEmpty)
-                        ? NetworkImage(caregiver.avatarUrl!)
-                        : null,
-                    child:
-                        (caregiver.avatarUrl == null ||
-                            caregiver.avatarUrl!.isEmpty)
-                        ? const Icon(Icons.person, size: 30, color: Colors.grey)
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                caregiver.nome,
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (caregiver.formacaoSaude) ...[
-                              const SizedBox(width: 6),
-                              _healthIcon,
-                            ],
-                          ],
+      child: Card(
+        elevation: 0,
+        color: Colors.white,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          side: BorderSide(color: Colors.grey.shade300, width: 1),
+        ),
+        child: InkWell(
+          onTap: () => onShowDetails(caregiver),
+          borderRadius: BorderRadius.circular(16.0),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 2,
                         ),
-                        const SizedBox(height: 4),
-                        if (caregiver.profissao != null &&
-                            caregiver.profissao!.isNotEmpty)
+                      ),
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.grey.shade100,
+                        backgroundImage:
+                            (caregiver.avatarUrl != null &&
+                                caregiver.avatarUrl!.isNotEmpty)
+                            ? NetworkImage(caregiver.avatarUrl!)
+                            : null,
+                        child:
+                            (caregiver.avatarUrl == null ||
+                                caregiver.avatarUrl!.isEmpty)
+                            ? const Icon(
+                                Icons.person,
+                                size: 28,
+                                color: Colors.grey,
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  caregiver.nome,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.black87,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (caregiver.formacaoSaude) ...[
+                                const SizedBox(width: 4),
+                                _healthIcon,
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+
                           Text(
-                            caregiver.profissao!,
+                            caregiver.profissao != null &&
+                                    caregiver.profissao!.isNotEmpty
+                                ? caregiver.profissao!
+                                : (caregiver.especialidades.isNotEmpty
+                                      ? caregiver.especialidades.first
+                                      : 'Cuidador'),
                             style: TextStyle(
                               fontSize: 13,
-                              color: AppColors.primary,
                               fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          )
-                        else
-                          Text(
-                            caregiver.especialidades.isNotEmpty
-                                ? caregiver.especialidades.join(', ')
-                                : 'Especialidades não informadas',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Colors.black54,
+                              color: AppColors.primary.shade700,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
 
-                        const SizedBox(height: 6),
+                          const SizedBox(height: 6),
 
-                        Row(
-                          children: [
-                            _buildStarRating(caregiver.avaliacaoMedia),
-                            const Spacer(),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  size: 14,
-                                  color: Colors.grey.shade700,
-                                ),
-                                const SizedBox(width: 4),
+                          Row(
+                            children: [
+                              _buildStarRating(caregiver.avaliacaoMedia),
+                              if (caregiver.avaliacaoMedia > 0)
                                 Text(
-                                  caregiver.location,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade700,
+                                  " ${caregiver.avaliacaoMedia.toStringAsFixed(1)}",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
+                              const Spacer(),
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 14,
+                                color: Colors.grey.shade500,
+                              ),
+                              const SizedBox(width: 2),
+                              Flexible(
+                                child: Text(
+                                  caregiver.city ?? 'Local n/d',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const Divider(height: 24, thickness: 0.5),
+                _buildFeaturesRow(),
 
-              Row(
-                children: [
-                  _buildInfoChip(
-                    caregiver.availabilityText,
-                    Colors.grey.shade700,
-                  ),
-                  const Spacer(),
-                  _buildInfoChip(
-                    '${currencyFormat.format(caregiver.hourlyRate)}/h',
-                    AppColors.success,
-                  ),
-                ],
-              ),
-            ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  child: Divider(height: 1, thickness: 0.5),
+                ),
+
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        caregiver.availabilityText,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    _buildInfoChip(
+                      '${currencyFormat.format(caregiver.hourlyRate)}/h',
+                      AppColors.primary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -37,14 +37,25 @@ class _MainScreenState extends State<MainScreen> {
     bool? healthPro,
     String? time,
     String? sort,
+    bool? possuiCarro,
+    bool? cozinha,
+    bool? limpeza,
+    bool? dormirLocal,
+    bool? gostaAnimais,
   }) {
     setState(() => _selectedIndex = 1);
+
     Future.delayed(const Duration(milliseconds: 100), () {
       _searchKey.currentState?.applyFilters(
         searchText: query,
         onlyHealthPro: healthPro,
         timeKey: time,
         sortOrder: sort,
+        possuiCarro: possuiCarro,
+        cozinha: cozinha,
+        limpeza: limpeza,
+        dormirLocal: dormirLocal,
+        gostaAnimais: gostaAnimais,
       );
     });
   }

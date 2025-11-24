@@ -58,11 +58,17 @@ class _CompleteCaregiverProfileScreenState
   final _availabilityTimeNotifier = ValueNotifier<String?>(null);
   final _availabilityController = TextEditingController();
   final _acceptTermsNotifier = ValueNotifier<bool>(false);
+  final _fumanteNotifier = ValueNotifier<bool>(false);
+  final _cnhNotifier = ValueNotifier<bool>(false);
+  final _carroNotifier = ValueNotifier<bool>(false);
+  final _petsNotifier = ValueNotifier<bool>(false);
+  final _cozinhaNotifier = ValueNotifier<bool>(false);
+  final _limpezaNotifier = ValueNotifier<bool>(false);
+  final _dormirNotifier = ValueNotifier<bool>(false);
 
   @override
   void dispose() {
     _pageController.dispose();
-
     _cpfController.dispose();
     _birthDateController.dispose();
     _fullAddressController.dispose();
@@ -71,7 +77,6 @@ class _CompleteCaregiverProfileScreenState
     _stateController.dispose();
     _selectedGeneroNotifier.dispose();
     _profileImageNotifier.dispose();
-
     _profissaoController.dispose();
     _formacaoSaudeNotifier.dispose();
     _experienceController.dispose();
@@ -84,9 +89,15 @@ class _CompleteCaregiverProfileScreenState
     _hourlyRateController.dispose();
     _availabilityDaysNotifier.dispose();
     _availabilityTimeNotifier.dispose();
-
     _availabilityController.dispose();
     _acceptTermsNotifier.dispose();
+    _fumanteNotifier.dispose();
+    _cnhNotifier.dispose();
+    _carroNotifier.dispose();
+    _petsNotifier.dispose();
+    _cozinhaNotifier.dispose();
+    _limpezaNotifier.dispose();
+    _dormirNotifier.dispose();
 
     super.dispose();
   }
@@ -247,6 +258,13 @@ class _CompleteCaregiverProfileScreenState
         'availability': _availabilityController.text,
         'profissao': _profissaoController.text.trim(),
         'formacao_saude': _formacaoSaudeNotifier.value,
+        'fumante': _fumanteNotifier.value,
+        'habilita_cnh': _cnhNotifier.value,
+        'possui_carro': _carroNotifier.value,
+        'gosta_animais': _petsNotifier.value,
+        'cozinha': _cozinhaNotifier.value,
+        'limpeza': _limpezaNotifier.value,
+        'dormir_local': _dormirNotifier.value,
         if (certificateUrls != null) 'certificado_url': certificateUrls,
         'approval_status': 'Pendente',
       };
@@ -343,6 +361,13 @@ class _CompleteCaregiverProfileScreenState
                             hourlyRateController: _hourlyRateController,
                             availabilityDaysNotifier: _availabilityDaysNotifier,
                             availabilityTimeNotifier: _availabilityTimeNotifier,
+                            fumanteNotifier: _fumanteNotifier,
+                            cnhNotifier: _cnhNotifier,
+                            carroNotifier: _carroNotifier,
+                            petsNotifier: _petsNotifier,
+                            cozinhaNotifier: _cozinhaNotifier,
+                            limpaNotifier: _limpezaNotifier,
+                            dormeLocalNotifier: _dormirNotifier,
                           ),
                           Step3Profile(
                             formKey: _formKeyStep3,

@@ -14,6 +14,13 @@ class CaregiverService {
     String sortOrder = 'rating_desc',
     int limit = 10,
     int offset = 0,
+    bool? fumante,
+    bool? habilitaCnh,
+    bool? possuiCarro,
+    bool? gostaAnimais,
+    bool? cozinha,
+    bool? limpeza,
+    bool? dormirLocal,
   }) async {
     dynamic query = supabase
         .from('cuidadores')
@@ -55,6 +62,14 @@ class CaregiverService {
           query = query.not('availability', 'ilike', '%Fins de Semana%');
         }
       }
+
+      if (fumante != null) query = query.eq('fumante', fumante);
+      if (habilitaCnh == true) query = query.eq('habilita_cnh', true);
+      if (possuiCarro == true) query = query.eq('possui_carro', true);
+      if (gostaAnimais == true) query = query.eq('gosta_animais', true);
+      if (cozinha == true) query = query.eq('cozinha', true);
+      if (limpeza == true) query = query.eq('limpeza', true);
+      if (dormirLocal == true) query = query.eq('dormir_local', true);
 
       switch (sortOrder) {
         case 'rating_asc':

@@ -4,7 +4,6 @@ import 'package:careconnect_app/models/caregiver_profile.dart';
 import 'package:careconnect_app/services/caregiver_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProfessionalProfileScreen extends StatefulWidget {
   final CaregiverProfile caregiverProfile;
@@ -36,6 +35,15 @@ class _EditProfessionalProfileScreenState
   late final ValueNotifier<String?> _availabilityDaysNotifier;
   late final ValueNotifier<String?> _availabilityTimeNotifier;
   late final ValueNotifier<List<String>> _selectedSpecialtiesNotifier;
+
+  late final ValueNotifier<bool> _fumanteNotifier;
+  late final ValueNotifier<bool> _cnhNotifier;
+  late final ValueNotifier<bool> _carroNotifier;
+  late final ValueNotifier<bool> _petsNotifier;
+
+  late final ValueNotifier<bool> _cozinhaNotifier;
+  late final ValueNotifier<bool> _limpezaNotifier;
+  late final ValueNotifier<bool> _dormirNotifier;
 
   final CurrencyInputFormatter _currencyFormatter = CurrencyInputFormatter();
 
@@ -75,6 +83,15 @@ class _EditProfessionalProfileScreenState
     _formacaoSaudeNotifier = ValueNotifier(profile.formacaoSaude);
     _selectedSpecialtiesNotifier = ValueNotifier(profile.especialidades);
 
+    _fumanteNotifier = ValueNotifier(profile.fumante);
+    _cnhNotifier = ValueNotifier(profile.habilitaCnh);
+    _carroNotifier = ValueNotifier(profile.possuiCarro);
+    _petsNotifier = ValueNotifier(profile.gostaAnimais);
+
+    _cozinhaNotifier = ValueNotifier(profile.cozinha);
+    _limpezaNotifier = ValueNotifier(profile.limpeza);
+    _dormirNotifier = ValueNotifier(profile.dormirLocal);
+
     final availability = profile.availabilityText.split(', ');
     _availabilityDaysNotifier = ValueNotifier(
       _availabilityDayOptions.contains(availability[0])
@@ -100,6 +117,14 @@ class _EditProfessionalProfileScreenState
     _availabilityDaysNotifier.dispose();
     _availabilityTimeNotifier.dispose();
     _selectedSpecialtiesNotifier.dispose();
+    _fumanteNotifier.dispose();
+    _cnhNotifier.dispose();
+    _carroNotifier.dispose();
+    _petsNotifier.dispose();
+    _cozinhaNotifier.dispose();
+    _limpezaNotifier.dispose();
+    _dormirNotifier.dispose();
+
     super.dispose();
   }
 
@@ -160,6 +185,14 @@ class _EditProfessionalProfileScreenState
         'especialidades': _selectedSpecialtiesNotifier.value.join(','),
         'hourly_rate': hourlyRate,
         'availability': availability,
+
+        'fumante': _fumanteNotifier.value,
+        'habilita_cnh': _cnhNotifier.value,
+        'possui_carro': _carroNotifier.value,
+        'gosta_animais': _petsNotifier.value,
+        'cozinha': _cozinhaNotifier.value,
+        'limpeza': _limpezaNotifier.value,
+        'dormir_local': _dormirNotifier.value,
       };
 
       await _caregiverService.updateProfile(
@@ -176,15 +209,6 @@ class _EditProfessionalProfileScreenState
         );
         Navigator.pop(context, true);
       }
-    } on PostgrestException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: ${error.message}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,6 +223,31 @@ class _EditProfessionalProfileScreenState
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Widget _buildSwitchTile(
+    String title,
+    String subtitle,
+    ValueNotifier<bool> notifier,
+    IconData icon,
+  ) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: notifier,
+      builder: (context, value, _) {
+        return SwitchListTile(
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+          value: value,
+          onChanged: (val) => notifier.value = val,
+          secondary: Icon(icon, color: AppColors.primary),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        );
+      },
+    );
   }
 
   @override
@@ -255,6 +304,62 @@ class _EditProfessionalProfileScreenState
               textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 16),
+
+            const Text(
+              "Informações Adicionais",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _buildSwitchTile(
+              "Fumante",
+              "Você fuma?",
+              _fumanteNotifier,
+              Icons.smoking_rooms,
+            ),
+            _buildSwitchTile(
+              "Carteira de Habilitação (CNH)",
+              "Você possui habilitação válida?",
+              _cnhNotifier,
+              Icons.directions_car,
+            ),
+            _buildSwitchTile(
+              "Veículo Próprio",
+              "Possui carro para deslocamento?",
+              _carroNotifier,
+              Icons.car_rental,
+            ),
+            _buildSwitchTile(
+              "Gosta de Animais",
+              "Você se sente confortável em casas com pets?",
+              _petsNotifier,
+              Icons.pets,
+            ),
+            const Divider(height: 30),
+            const Text(
+              "Preferências de Serviço",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _buildSwitchTile(
+              "Cozinha para o paciente",
+              "Aceita preparar refeições simples?",
+              _cozinhaNotifier,
+              Icons.soup_kitchen,
+            ),
+            _buildSwitchTile(
+              "Limpeza leve",
+              "Aceita manter o ambiente do paciente limpo?",
+              _limpezaNotifier,
+              Icons.cleaning_services,
+            ),
+            _buildSwitchTile(
+              "Dormir no local",
+              "Disponibilidade para pernoites/dormir?",
+              _dormirNotifier,
+              Icons.bedtime,
+            ),
+            const Divider(height: 30),
+
             ValueListenableBuilder<bool>(
               valueListenable: _formacaoSaudeNotifier,
               builder: (context, isChecked, _) {
