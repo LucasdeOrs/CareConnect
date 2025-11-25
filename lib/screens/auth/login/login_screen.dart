@@ -2,6 +2,7 @@ import 'package:careconnect_app/core/constants/app_colors.dart';
 import 'package:careconnect_app/screens/auth/reset_password/forgot_password_screen.dart';
 import 'package:careconnect_app/services/auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../register_family_screen/register_family_screen.dart';
 import '../../../core/widgets/logo_widget.dart';
 
@@ -45,6 +46,14 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
+
+      if (mounted) {
+        final user = Supabase.instance.client.auth.currentUser;
+
+        if (user != null) {
+          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+        }
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
